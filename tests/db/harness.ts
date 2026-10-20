@@ -21,8 +21,10 @@ const SUPABASE_STUB = `
   alter default privileges in schema public grant all on sequences to anon, authenticated;
   alter default privileges in schema public grant execute on functions to anon, authenticated;
 `
+// 진짜 Supabase 에서는 위 기본 권한(표·시퀀스·함수를 anon/authenticated/service_role 에 부여)에 더해
+// Postgres 기본값(함수 EXECUTE 는 PUBLIC)도 그대로 적용된다. PGlite 의 기본값도 같다.
 
-export async function createDb(): Promise<PGlite> {
+async function buildTemplate(): Promise<PGlite> {
   const db = new PGlite()
   await db.exec(SUPABASE_STUB)
   let files: string[] = []
@@ -36,6 +38,14 @@ export async function createDb(): Promise<PGlite> {
     await db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'))
   }
   return db
+}
+
+// 마이그레이션 전체를 적용하는 데 몇 초가 걸리므로, 한 번만 적용한 견본을 만들어 두고 복제해서 쓴다.
+let template: Promise<PGlite> | undefined
+
+export async function createDb(): Promise<PGlite> {
+  template ??= buildTemplate()
+  return (await (await template).clone()) as PGlite
 }
 
 export async function asUser<T>(db: PGlite, userId: string | null, fn: () => Promise<T>): Promise<T> {

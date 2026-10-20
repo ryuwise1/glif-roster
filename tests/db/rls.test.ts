@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 import { asUser, createDb } from './harness'
 import { M, U, seed } from './fixtures'
@@ -7,6 +7,9 @@ let db: PGlite
 beforeEach(async () => {
   db = await createDb()
   await seed(db)
+})
+afterEach(async () => {
+  await db.close()
 })
 
 const rows = (userId: string | null, sql: string) =>
