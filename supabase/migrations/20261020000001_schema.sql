@@ -62,7 +62,7 @@ end $$;
 
 create trigger members_check_cohort before insert or update of cohort on public.members
   for each row execute function public.check_cohort();
-create trigger members_touch before update on public.members
+create trigger members_touch before insert or update on public.members
   for each row execute function public.touch_updated();
 
 -- 경력 (현직·전 직장·인턴·학업)
@@ -79,13 +79,13 @@ create table public.careers (
   region text,
   started_on date,
   ended_on date,
-  check (ended_on is null or started_on is null or ended_on >= started_on),
+  constraint careers_period_order check (ended_on is null or started_on is null or ended_on >= started_on),
   updated_at timestamptz not null default now(),
   updated_by uuid
 );
 create index careers_member_idx on public.careers (member_id);
 
-create trigger careers_touch before update on public.careers
+create trigger careers_touch before insert or update on public.careers
   for each row execute function public.touch_updated();
 
 -- 계정 연결 (로그인 계정 ↔ 사람)
@@ -100,10 +100,11 @@ create table public.accounts (
   decided_at timestamptz,
   decided_by uuid,
   reject_reason text,
-  check (claimed_name is null or length(trim(claimed_name)) > 0),
-  check (claimed_cohort is null or claimed_cohort >= 1),
-  check (member_id is not null or (claimed_name is not null and claimed_cohort is not null)),
-  check (status <> '승인' or member_id is not null)
+  constraint accounts_claimed_name_not_blank check (claimed_name is null or length(trim(claimed_name)) > 0),
+  constraint accounts_claimed_cohort_min check (claimed_cohort is null or claimed_cohort >= 1),
+  constraint accounts_has_member_or_claim
+    check (member_id is not null or (claimed_name is not null and claimed_cohort is not null)),
+  constraint accounts_approved_needs_member check (status <> '승인' or member_id is not null)
 );
 create unique index accounts_one_approved_per_member
   on public.accounts (member_id) where status = '승인';

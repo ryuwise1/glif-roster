@@ -72,7 +72,7 @@ describe('accounts 제약', () => {
   it('승인 상태는 연결된 학회원이 있어야 한다', async () => {
     await expect(
       db.exec(`update public.accounts set member_id = null, claimed_name = '직접입력', claimed_cohort = 20, status = '승인' where user_id = '${U.pending}'`),
-    ).rejects.toThrow(/accounts_check1/)
+    ).rejects.toThrow(/accounts_approved_needs_member/)
   })
 
   it('한 학회원에 승인된 계정은 하나뿐이다', async () => {
@@ -84,13 +84,13 @@ describe('accounts 제약', () => {
   it('학회원도 직접 입력도 없는 신청은 막는다', async () => {
     await expect(
       db.exec(`insert into public.accounts (user_id) values ('${U.stranger}')`),
-    ).rejects.toThrow(/constraint "accounts_check"/)
+    ).rejects.toThrow(/accounts_has_member_or_claim/)
   })
 
   it('직접 입력한 기수는 1 이상이어야 한다', async () => {
     await expect(
       db.exec(`insert into public.accounts (user_id, claimed_name, claimed_cohort) values ('${U.stranger}', '직접입력', 0)`),
-    ).rejects.toThrow(/accounts_claimed_cohort_check/)
+    ).rejects.toThrow(/accounts_claimed_cohort_min/)
   })
 
   it('직접 입력한 기수는 현재 기수보다 클 수 없다', async () => {
@@ -102,7 +102,7 @@ describe('accounts 제약', () => {
   it('직접 입력한 이름이 공백뿐이면 막는다', async () => {
     await expect(
       db.exec(`insert into public.accounts (user_id, member_id, claimed_name, claimed_cohort) values ('${U.stranger}', null, '  ', 19)`),
-    ).rejects.toThrow(/accounts_claimed_name_check/)
+    ).rejects.toThrow(/accounts_claimed_name_not_blank/)
   })
 })
 
@@ -116,7 +116,7 @@ describe('careers 제약', () => {
   it('종료일이 시작일보다 빠를 수 없다', async () => {
     await expect(
       db.exec(`insert into public.careers (member_id, company, started_on, ended_on) values ('${M.member}', '가짜', '2025-06-01', '2025-01-01')`),
-    ).rejects.toThrow(/careers_check/)
+    ).rejects.toThrow(/careers_period_order/)
   })
 
   it('업종 목록에 없는 업종은 저장할 수 없다', async () => {

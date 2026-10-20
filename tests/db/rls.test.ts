@@ -116,6 +116,40 @@ describe('수정 권한', () => {
   })
 })
 
+describe('수정자 기록', () => {
+  const SPOOF = '99999999-9999-9999-9999-999999999999'
+
+  it('학회원을 추가할 때 수정자와 수정 시각을 꾸며도 로그인한 관리자와 현재 시각으로 덮어쓴다', async () => {
+    await asUser(db, U.admin, () =>
+      db.exec(`insert into public.members (id, name, cohort, updated_by, updated_at)
+        values ('10000000-0000-0000-0000-0000000000b1', '테스트추가', 19, '${SPOOF}', '2000-01-01')`),
+    )
+    const [r] = await rows(U.super, `select updated_by, updated_at > now() - interval '1 hour' as fresh
+      from public.members where id = '10000000-0000-0000-0000-0000000000b1'`)
+    expect(r).toEqual({ updated_by: U.admin, fresh: true })
+  })
+
+  it('경력을 추가할 때 수정자와 수정 시각을 꾸며도 덮어쓴다', async () => {
+    await asUser(db, U.admin, () =>
+      db.exec(`insert into public.careers (id, member_id, company, updated_by, updated_at)
+        values ('20000000-0000-0000-0000-0000000000b1', '${M.free}', '가짜은행', '${SPOOF}', '2000-01-01')`),
+    )
+    const [r] = await rows(U.super, `select updated_by, updated_at > now() - interval '1 hour' as fresh
+      from public.careers where id = '20000000-0000-0000-0000-0000000000b1'`)
+    expect(r).toEqual({ updated_by: U.admin, fresh: true })
+  })
+
+  it('경력을 고치면 수정자가 고친 사람으로 바뀐다', async () => {
+    const [before] = await rows(U.super, `select updated_by from public.careers where company = '가짜증권'`)
+    expect(before.updated_by).toBeNull()
+    await asUser(db, U.admin, () =>
+      db.exec(`update public.careers set title = '대리', updated_by = '${SPOOF}' where company = '가짜증권'`),
+    )
+    const [after] = await rows(U.super, `select updated_by, title from public.careers where company = '가짜증권'`)
+    expect(after).toEqual({ updated_by: U.admin, title: '대리' })
+  })
+})
+
 describe('가입 신청과 승인', () => {
   it('가입 후보에는 해당 기수에서 아직 연결되지 않은 사람만 나온다', async () => {
     const r = await rows(U.stranger, 'select * from public.signup_candidates(19)')
