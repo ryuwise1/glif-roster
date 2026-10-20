@@ -40,10 +40,10 @@ begin
 end $$;
 
 -- 트리거 전용 함수라 직접 호출 권한은 아무에게도 주지 않는다
+revoke execute on function public.write_audit() from public, anon, authenticated;
+
 -- 번호표(시퀀스)는 소유자 권한의 트리거만 쓴다
 revoke all on sequence public.audit_log_id_seq from public, anon, authenticated;
-
-revoke execute on function public.write_audit() from public, anon, authenticated;
 
 create trigger members_audit after insert or update or delete on public.members
   for each row execute function public.write_audit();

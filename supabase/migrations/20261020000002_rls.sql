@@ -92,14 +92,34 @@ create policy accounts_admin_update on public.accounts for update to authenticat
 create policy accounts_admin_delete on public.accounts for delete to authenticated
   using (public.is_admin());
 
--- 최고관리자 보호와 결정 기록
--- SQL 편집기(postgres)에서 처음 최고관리자를 지정할 수 있도록, 검사는 앱 사용자(authenticated)에게만 한다.
+-- 이미 승인된 계정이 연결된 학회원인지. 가입 신청자는 accounts 를 다 볼 수 없으므로 security definer 로 확인한다.
+create function public.member_has_approved_account(p_member_id uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.accounts where member_id = p_member_id and status = '승인')
+$$;
+
+-- 계정 규칙: 최고관리자·관리자 보호, 마지막 최고관리자 보호, 결정 기록 위조 방지
+-- SQL 편집기(postgres)와 service_role 에서 처음 최고관리자를 지정할 수 있도록, 검사는 앱 사용자(authenticated)에게만 한다.
+-- 주의: accounts 를 security definer 함수 안에서 바꾸면 이 검사를 건너뛰므로, 그런 함수는 같은 검사를 직접 해야 한다.
 create function public.guard_accounts() returns trigger
 language plpgsql set search_path = '' as $$
 begin
   if tg_op = 'DELETE' then
-    if current_user = 'authenticated' and old.role = '최고관리자' and not public.is_superadmin() then
-      raise exception '최고 관리자 계정은 최고 관리자만 삭제할 수 있습니다';
+    if current_user = 'authenticated' then
+      if not public.is_superadmin() then
+        if old.role = '최고관리자' then
+          raise exception '최고 관리자 계정은 최고 관리자만 삭제할 수 있습니다';
+        end if;
+        if old.role = '관리자' and old.user_id <> auth.uid() then
+          raise exception '관리자 계정은 최고 관리자만 삭제할 수 있습니다';
+        end if;
+      end if;
+      if old.role = '최고관리자' and old.status = '승인' and not exists (
+        select 1 from public.accounts
+        where role = '최고관리자' and status = '승인' and user_id <> old.user_id
+      ) then
+        raise exception '마지막 최고 관리자 계정은 삭제할 수 없습니다. 먼저 다른 최고 관리자를 지정하세요';
+      end if;
     end if;
     return old;
   end if;
@@ -112,11 +132,36 @@ begin
       if tg_op = 'UPDATE' and old.role = '최고관리자' then
         raise exception '최고 관리자 계정은 최고 관리자만 바꿀 수 있습니다';
       end if;
+      -- 관리자끼리는 서로의 역할·상태를 바꾸지 못한다 (자기 자신은 내릴 수 있고, 학회원을 관리자로 올리는 것도 된다)
+      if tg_op = 'UPDATE' and old.role = '관리자' and old.user_id <> auth.uid()
+         and (new.role is distinct from old.role or new.status is distinct from old.status) then
+        raise exception '관리자 계정은 최고 관리자만 바꿀 수 있습니다';
+      end if;
     end if;
-    -- 가입 신청 때 결정 기록을 미리 채워 넣을 수 없다
+    -- 마지막 최고관리자는 스스로도 내려올 수 없다 (그러면 아무도 관리자를 지정할 수 없게 된다)
+    if tg_op = 'UPDATE' and old.role = '최고관리자' and old.status = '승인'
+       and (new.role is distinct from old.role or new.status is distinct from old.status)
+       and not exists (
+         select 1 from public.accounts
+         where role = '최고관리자' and status = '승인' and user_id <> old.user_id
+       ) then
+      raise exception '마지막 최고 관리자 계정은 강등하거나 거절할 수 없습니다. 먼저 다른 최고 관리자를 지정하세요';
+    end if;
+
     if tg_op = 'INSERT' then
+      -- 가입 신청 때 결정 기록을 미리 채워 넣을 수 없다
       new.decided_at := null;
       new.decided_by := null;
+      new.reject_reason := null;
+      if new.member_id is not null and public.member_has_approved_account(new.member_id) then
+        raise exception '이미 다른 계정과 연결된 학회원입니다';
+      end if;
+    elsif new.status is not distinct from old.status then
+      -- 상태를 그대로 두고는 결정 기록을 고칠 수 없다
+      new.decided_at := old.decided_at;
+      new.decided_by := old.decided_by;
+      new.reject_reason := old.reject_reason;
+    elsif new.status = '승인' then
       new.reject_reason := null;
     end if;
   end if;
@@ -131,6 +176,7 @@ create trigger accounts_guard before insert or update or delete on public.accoun
   for each row execute function public.guard_accounts();
 
 -- 학회원 열람용 뷰: 소유자 권한으로 members를 읽고, 승인 여부와 숨김 항목을 스스로 거른다.
+-- Security Advisor 의 security definer view 경고는 의도된 설계다 (숨긴 연락처를 가리는 유일한 열람 경로).
 create view public.member_directory as
 select
   m.id,
@@ -169,5 +215,11 @@ language sql stable security definer set search_path = '' as $$
   order by m.name
 $$;
 
-revoke execute on function public.signup_candidates(int) from public, anon;
-grant execute on function public.signup_candidates(int) to authenticated;
+-- 함수 실행 권한: 위에서 만든 모든 함수를 로그인하지 않은 사람(anon, PUBLIC)에게서 거둔다.
+-- 앞으로 만드는 함수는 PUBLIC 실행 권한이 기본으로 붙는다 (schema 한정 기본 권한으로는 PUBLIC 몫을 뺄 수 없다).
+-- 그래서 새 함수는 만든 직후 revoke execute 를 직접 하고, tests/db/rls.test.ts 의 '함수 실행 권한' 테스트가 빠뜨림을 잡는다.
+revoke execute on all functions in schema public from public, anon;
+grant execute on function
+  public.is_approved(), public.is_admin(), public.is_superadmin(), public.current_member_id(),
+  public.member_has_approved_account(uuid), public.signup_candidates(int)
+  to authenticated;
