@@ -50,7 +50,7 @@ create table public.members (
 create index members_cohort_idx on public.members (cohort);
 
 create function public.check_cohort() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 declare
   max_cohort int := (select current_cohort from public.settings);
 begin
@@ -110,7 +110,7 @@ create unique index accounts_one_approved_per_member
 
 -- 직접 입력한 기수도 현재 기수를 넘을 수 없다
 create function public.check_claimed_cohort() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 declare
   max_cohort int := (select current_cohort from public.settings);
 begin
@@ -125,7 +125,7 @@ create trigger accounts_check_claimed_cohort before insert or update of claimed_
 
 -- 계정이나 가입 신청이 연결된 학회원은 삭제할 수 없다
 create function public.block_member_delete() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
   if exists (select 1 from public.accounts where member_id = old.id) then
     raise exception '계정이나 가입 신청이 연결된 학회원은 삭제할 수 없습니다. 먼저 연결된 계정을 해제하세요';

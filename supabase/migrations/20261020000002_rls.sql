@@ -1,13 +1,18 @@
 -- GLIF 연명부: 권한 규칙
 
+-- 앞으로 만드는 표·시퀀스·함수가 로그인하지 않은 사람에게 자동으로 열리지 않게 한다
+alter default privileges in schema public revoke all on tables from anon;
+alter default privileges in schema public revoke all on sequences from anon;
+alter default privileges in schema public revoke all on functions from anon;
+
 -- 권한 확인 함수 (RLS 정책 안에서 accounts를 다시 읽으므로 security definer)
 create function public.is_approved() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.accounts where user_id = auth.uid() and status = '승인')
 $$;
 
 create function public.is_admin() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.accounts
     where user_id = auth.uid() and status = '승인' and role in ('관리자', '최고관리자')
@@ -15,7 +20,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 create function public.is_superadmin() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.accounts
     where user_id = auth.uid() and status = '승인' and role = '최고관리자'
@@ -23,12 +28,13 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 create function public.current_member_id() returns uuid
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = '' as $$
   select member_id from public.accounts where user_id = auth.uid() and status = '승인'
 $$;
 
 -- 로그인하지 않은 사람은 표에 손대지 못한다
 revoke all on all tables in schema public from anon;
+revoke all on all sequences in schema public from anon;
 
 -- RLS 켜기
 alter table public.settings enable row level security;
@@ -85,12 +91,27 @@ create policy accounts_admin_delete on public.accounts for delete to authenticat
 create function public.guard_accounts() returns trigger
 language plpgsql set search_path = '' as $$
 begin
-  if current_user = 'authenticated' and not public.is_superadmin() then
-    if new.role = '최고관리자' and (tg_op = 'INSERT' or old.role is distinct from '최고관리자') then
-      raise exception '최고 관리자만 최고 관리자를 지정할 수 있습니다';
+  if tg_op = 'DELETE' then
+    if current_user = 'authenticated' and old.role = '최고관리자' and not public.is_superadmin() then
+      raise exception '최고 관리자 계정은 최고 관리자만 삭제할 수 있습니다';
     end if;
-    if tg_op = 'UPDATE' and old.role = '최고관리자' then
-      raise exception '최고 관리자 계정은 최고 관리자만 바꿀 수 있습니다';
+    return old;
+  end if;
+
+  if current_user = 'authenticated' then
+    if not public.is_superadmin() then
+      if new.role = '최고관리자' and (tg_op = 'INSERT' or old.role is distinct from '최고관리자') then
+        raise exception '최고 관리자만 최고 관리자를 지정할 수 있습니다';
+      end if;
+      if tg_op = 'UPDATE' and old.role = '최고관리자' then
+        raise exception '최고 관리자 계정은 최고 관리자만 바꿀 수 있습니다';
+      end if;
+    end if;
+    -- 가입 신청 때 결정 기록을 미리 채워 넣을 수 없다
+    if tg_op = 'INSERT' then
+      new.decided_at := null;
+      new.decided_by := null;
+      new.reject_reason := null;
     end if;
   end if;
   if tg_op = 'UPDATE' and new.status is distinct from old.status then
@@ -100,7 +121,7 @@ begin
   return new;
 end $$;
 
-create trigger accounts_guard before insert or update on public.accounts
+create trigger accounts_guard before insert or update or delete on public.accounts
   for each row execute function public.guard_accounts();
 
 -- 학회원 열람용 뷰: 소유자 권한으로 members를 읽고, 승인 여부와 숨김 항목을 스스로 거른다.
@@ -125,13 +146,14 @@ select
 from public.members m
 where public.is_approved();
 
-revoke all on public.member_directory from anon;
+-- 뷰는 소유자 권한으로 members를 읽으므로 쓰기 권한이 남아 있으면 RLS를 우회한다. 읽기만 허용한다.
+revoke all on public.member_directory from public, anon, authenticated;
 grant select on public.member_directory to authenticated;
 
 -- 가입 신청 화면용: 기수별로 아직 연결되지 않은 사람의 이름만 돌려준다 (연락처는 주지 않음)
 create function public.signup_candidates(p_cohort int)
 returns table (id uuid, name text)
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = '' as $$
   select m.id, m.name
   from public.members m
   where m.cohort = p_cohort
