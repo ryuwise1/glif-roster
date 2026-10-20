@@ -30,6 +30,31 @@ export async function approve(formData: FormData) {
   redirect(`${LIST}?done=approved`)
 }
 
+// 체크한 신청을 한 번에 승인한다. 연명부의 사람과 연결된 신청만 대상이고,
+// 이미 처리됐거나 다른 계정이 연결된 사람은 건너뛰고 몇 명을 건너뛰었는지 알린다.
+const BULK_LIMIT = 200
+
+export async function approveMany(formData: FormData) {
+  await requireAdmin()
+  const ids = [...new Set(formData.getAll('user_id').map(String))]
+  if (!ids.length) redirect(`${LIST}?error=none`)
+  if (ids.length > BULK_LIMIT || !ids.every((id) => UUID.test(id))) redirect(`${LIST}?error=failed`)
+
+  const supabase = await createClient()
+  let approved = 0
+  for (const userId of ids) {
+    const { data } = await supabase
+      .from('accounts')
+      .update({ status: '승인' })
+      .eq('user_id', userId)
+      .eq('status', '대기')
+      .not('member_id', 'is', null)
+      .select('user_id')
+    if (data?.length) approved++
+  }
+  redirect(`${LIST}?done=bulk&n=${approved}&skipped=${ids.length - approved}`)
+}
+
 // "목록에 없음"으로 신청한 사람을 새 학회원으로 추가하고 그 사람에 연결해 승인한다
 export async function approveAsNew(formData: FormData) {
   await requireAdmin()

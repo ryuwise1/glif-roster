@@ -280,6 +280,27 @@ describe('가입 신청 화면 지원', () => {
     expect(r.email).toBe('real@example.com')
   })
 
+  it('가입 신청 때 로그인 계정 이름이 자동으로 남고, 꾸며 넣거나 바꿀 수 없다', async () => {
+    await db.exec(`update auth.users set raw_user_meta_data = '{"full_name": " 진짜이름 ", "name": "다른이름"}' where id = '${U.stranger}'`)
+    await asUser(db, U.stranger, () =>
+      db.exec(`insert into public.accounts (user_id, member_id, login_name) values ('${U.stranger}', '${M.free}', '꾸민이름')`),
+    )
+    await asUser(db, U.admin, () => db.exec(`update public.accounts set login_name = '바꾼이름' where user_id = '${U.stranger}'`))
+    const [r] = await rows(U.admin, `select login_name from public.accounts where user_id = '${U.stranger}'`)
+    expect(r.login_name).toBe('진짜이름')
+  })
+
+  it('full_name 이 없으면 name 을 쓰고, 둘 다 없으면 비워 둔다', async () => {
+    await db.exec(`update auth.users set raw_user_meta_data = '{"name": "카카오이름"}' where id = '${U.stranger}'`)
+    await asUser(db, U.stranger, () =>
+      db.exec(`insert into public.accounts (user_id, member_id) values ('${U.stranger}', '${M.free}')`),
+    )
+    const [r] = await rows(U.admin, `select login_name from public.accounts where user_id = '${U.stranger}'`)
+    expect(r.login_name).toBe('카카오이름')
+    const [p] = await rows(U.admin, `select login_name from public.accounts where user_id = '${U.pending}'`)
+    expect(p.login_name).toBeNull()
+  })
+
   it('다른 학회원은 계정 이메일을 볼 수 없다', async () => {
     await db.exec(`update auth.users set email = 'real@example.com' where id = '${U.stranger}'`)
     await asUser(db, U.stranger, () =>
