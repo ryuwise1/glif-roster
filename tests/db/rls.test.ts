@@ -412,6 +412,57 @@ describe('관리자끼리와 마지막 최고관리자', () => {
     expect(await acct(U.admin)).toEqual({ role: '최고관리자', status: '승인' })
   })
 
+  describe('로그인 계정 바꿔치기', () => {
+    const snapshot = () => rows(U.super, 'select user_id, member_id, role, status from public.accounts order by user_id')
+
+    it('관리자는 다른 관리자의 로그인 계정을 다른 사람으로 바꿀 수 없다', async () => {
+      const before = await snapshot()
+      await expect(
+        asUser(db, U.admin, () => db.exec(`update public.accounts set user_id = '${U.stranger}' where user_id = '${U.member}'`)),
+      ).rejects.toThrow(/로그인 계정은 바꿀 수 없습니다/)
+      expect(await snapshot()).toEqual(before)
+    })
+
+    it('관리자는 다른 관리자의 연결 학회원을 바꿀 수 없다', async () => {
+      const before = await snapshot()
+      await expect(
+        asUser(db, U.admin, () => db.exec(`update public.accounts set member_id = '${M.free}' where user_id = '${U.member}'`)),
+      ).rejects.toThrow(/관리자 계정은 최고 관리자만 바꿀 수 있습니다/)
+      expect(await snapshot()).toEqual(before)
+    })
+
+    it('관리자는 학회원 행의 로그인 계정도 바꿀 수 없다', async () => {
+      const before = await snapshot()
+      await expect(
+        asUser(db, U.admin, () => db.exec(`update public.accounts set user_id = '${U.stranger}' where user_id = '${U.pending}'`)),
+      ).rejects.toThrow(/로그인 계정은 바꿀 수 없습니다/)
+      expect(await snapshot()).toEqual(before)
+    })
+
+    it('최고관리자도 자기 행의 로그인 계정을 바꿀 수 없다', async () => {
+      const before = await snapshot()
+      await expect(
+        asUser(db, U.super, () => db.exec(`update public.accounts set user_id = '${U.stranger}' where user_id = '${U.super}'`)),
+      ).rejects.toThrow(/로그인 계정은 바꿀 수 없습니다/)
+      expect(await snapshot()).toEqual(before)
+    })
+
+    it('관리자도 자기 행의 로그인 계정을 바꿀 수 없다', async () => {
+      const before = await snapshot()
+      await expect(
+        asUser(db, U.admin, () => db.exec(`update public.accounts set user_id = '${U.stranger}' where user_id = '${U.admin}'`)),
+      ).rejects.toThrow(/로그인 계정은 바꿀 수 없습니다/)
+      expect(await snapshot()).toEqual(before)
+    })
+
+    it('일반 학회원은 자기 행을 고칠 수 없다 (행이 보이지 않아 아무 일도 일어나지 않는다)', async () => {
+      await db.exec(`update public.accounts set role = '학회원' where user_id = '${U.member}'`)
+      const before = await snapshot()
+      await asUser(db, U.member, () => db.exec(`update public.accounts set user_id = '${U.stranger}' where user_id = '${U.member}'`))
+      expect(await snapshot()).toEqual(before)
+    })
+  })
+
   it('SQL 편집기(postgres)에서는 이 검사를 받지 않는다', async () => {
     await db.exec(`update public.accounts set role = '관리자' where user_id = '${U.super}'`)
     expect(await acct(U.super)).toEqual({ role: '관리자', status: '승인' })

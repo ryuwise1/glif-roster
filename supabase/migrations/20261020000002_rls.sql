@@ -125,6 +125,10 @@ begin
   end if;
 
   if current_user = 'authenticated' then
+    -- 로그인 계정(user_id)을 바꾸면 그 계정의 역할이 다른 사람에게 넘어가므로 누구도 바꿀 수 없다
+    if tg_op = 'UPDATE' and new.user_id is distinct from old.user_id then
+      raise exception '로그인 계정은 바꿀 수 없습니다';
+    end if;
     if not public.is_superadmin() then
       if new.role = '최고관리자' and (tg_op = 'INSERT' or old.role is distinct from '최고관리자') then
         raise exception '최고 관리자만 최고 관리자를 지정할 수 있습니다';
@@ -132,9 +136,8 @@ begin
       if tg_op = 'UPDATE' and old.role = '최고관리자' then
         raise exception '최고 관리자 계정은 최고 관리자만 바꿀 수 있습니다';
       end if;
-      -- 관리자끼리는 서로의 역할·상태를 바꾸지 못한다 (자기 자신은 내릴 수 있고, 학회원을 관리자로 올리는 것도 된다)
-      if tg_op = 'UPDATE' and old.role = '관리자' and old.user_id <> auth.uid()
-         and (new.role is distinct from old.role or new.status is distinct from old.status) then
+      -- 관리자끼리는 서로의 행을 고치지 못한다 (자기 자신은 내릴 수 있고, 학회원을 관리자로 올리는 것도 된다)
+      if tg_op = 'UPDATE' and old.role = '관리자' and old.user_id <> auth.uid() then
         raise exception '관리자 계정은 최고 관리자만 바꿀 수 있습니다';
       end if;
     end if;
