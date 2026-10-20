@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PGlite } from '@electric-sql/pglite'
 import { createDb } from './db/harness'
-// @ts-expect-error .mjs 스크립트라 타입 선언이 없다
 import { buildImport, parsePeriod, readWorkbook, resolveMember, toSql } from '../scripts/import/excel-roster.mjs'
 
 type Member = { name: string; cohort: number; studentYear: number | null }
