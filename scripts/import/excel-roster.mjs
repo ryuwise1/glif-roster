@@ -9,16 +9,18 @@
 //   private/roster-import.sql   Supabase SQL 편집기에서 실행. 여러 번 실행해도 같은 결과다.
 //   private/import-review.txt   확인 필요 목록(동명이인, 명단에 없는 사람 등). 회장이 확인한다.
 //
+// private/homecoming-2026-09.json (홈커밍 설문 응답)이 있으면 그 현직을 SQL 끝에 덧붙인다. homecoming-survey.mjs 참고.
+//
 // 먼저 glifskku-members.mjs 로 학회원 명단을 넣은 뒤에 실행한다 (경력은 그 학회원에게 붙는다).
 // 사람 맞추기는 이름 + 학번(+기수)로 한다. 이름만으로는 맞추지 않는다.
 import ExcelJS from 'exceljs'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseMembers } from './glifskku-members.mjs'
 
-const PERSONAL_DOMAINS = ['gmail.com', 'naver.com', 'hotmail.com', 'outlook.com', 'daum.net', 'hanmail.net', 'kakao.com', 'icloud.com', 'nate.com', 'yahoo.com']
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+export const PERSONAL_DOMAINS = ['gmail.com', 'naver.com', 'hotmail.com', 'outlook.com', 'daum.net', 'hanmail.net', 'kakao.com', 'icloud.com', 'nate.com', 'yahoo.com']
+export const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const PHONE = /^010-\d{4}-\d{4}$/
 
 // ---------- 셀 읽기 ----------
@@ -364,7 +366,17 @@ async function main() {
   mkdirSync(join(root, 'private'), { recursive: true })
   const sqlPath = join(root, 'private', 'roster-import.sql')
   const reviewPath = join(root, 'private', 'import-review.txt')
-  writeFileSync(sqlPath, toSql(result))
+  // 홈커밍 설문 응답이 있으면 엑셀 뒤에 붙인다 (설문이 더 최근 값이라 마지막에 덮어쓴다)
+  const surveyPath = join(root, 'private', 'homecoming-2026-09.json')
+  let sql = toSql(result)
+  if (existsSync(surveyPath)) {
+    const { buildSurvey, surveySql } = await import('./homecoming-survey.mjs')
+    const survey = buildSurvey(JSON.parse(readFileSync(surveyPath, 'utf8')), members, result.people)
+    sql += '\n' + surveySql(survey)
+    result.review.push(...survey.review)
+    console.log(`홈커밍 설문: 현직 ${survey.actions.filter((a) => a.career).length}명 (같은 회사 ${survey.actions.filter((a) => a.keep).length}명), 확인 필요 ${survey.review.length}건`)
+  }
+  writeFileSync(sqlPath, sql)
   writeFileSync(
     reviewPath,
     [`# 확인 필요 (${result.review.length}건): 사람을 한 명으로 정하지 못해 넣지 않은 줄`, ...result.review.map((x) => `- ${x}`), '', `# 참고 (${result.issues.length}건): 넣었지만 확인하면 좋은 줄`, ...result.issues.map((x) => `- ${x}`), ''].join('\n'),
@@ -379,4 +391,10 @@ async function main() {
   console.log(`\n만든 파일:\n  ${sqlPath}\n  ${reviewPath}`)
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main()
+// await 하지 않는다: main 이 불러오는 homecoming-survey.mjs 가 이 파일을 다시 불러오므로, 이 파일의 평가가 먼저 끝나야 한다
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+}
