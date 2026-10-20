@@ -253,6 +253,43 @@ describe('가입 신청과 승인', () => {
   })
 })
 
+describe('가입 신청 화면 지원', () => {
+  it('로그인한 사람은 현재 기수부터 1기까지 기수 선택지를 받는다', async () => {
+    const r = await rows(U.stranger, 'select * from public.signup_cohorts() as c')
+    expect(r).toHaveLength(20)
+    expect(r[0]).toEqual({ c: 20 })
+    expect(r[19]).toEqual({ c: 1 })
+  })
+
+  it('가입 신청 때 로그인 계정의 이메일이 자동으로 남고, 꾸며 넣을 수 없다', async () => {
+    await db.exec(`update auth.users set email = 'real@example.com' where id = '${U.stranger}'`)
+    await asUser(db, U.stranger, () =>
+      db.exec(`insert into public.accounts (user_id, member_id, email) values ('${U.stranger}', '${M.free}', 'fake@example.com')`),
+    )
+    const [r] = await rows(U.admin, `select email from public.accounts where user_id = '${U.stranger}'`)
+    expect(r.email).toBe('real@example.com')
+  })
+
+  it('관리자도 계정의 이메일을 바꿀 수 없다', async () => {
+    await db.exec(`update auth.users set email = 'real@example.com' where id = '${U.stranger}'`)
+    await asUser(db, U.stranger, () =>
+      db.exec(`insert into public.accounts (user_id, member_id) values ('${U.stranger}', '${M.free}')`),
+    )
+    await asUser(db, U.admin, () => db.exec(`update public.accounts set email = 'other@example.com' where user_id = '${U.stranger}'`))
+    const [r] = await rows(U.admin, `select email from public.accounts where user_id = '${U.stranger}'`)
+    expect(r.email).toBe('real@example.com')
+  })
+
+  it('다른 학회원은 계정 이메일을 볼 수 없다', async () => {
+    await db.exec(`update auth.users set email = 'real@example.com' where id = '${U.stranger}'`)
+    await asUser(db, U.stranger, () =>
+      db.exec(`insert into public.accounts (user_id, member_id) values ('${U.stranger}', '${M.free}')`),
+    )
+    const r = await rows(U.member, `select email from public.accounts where user_id = '${U.stranger}'`)
+    expect(r).toHaveLength(0)
+  })
+})
+
 describe('결정 기록', () => {
   const decision = async () =>
     (await rows(U.super, `select status, decided_by, decided_at, reject_reason from public.accounts where user_id = '${U.pending}'`))[0]
@@ -521,7 +558,7 @@ describe('함수 실행 권한', () => {
     (await db.query<{ ok: boolean }>(`select has_function_privilege('${role}', '${sig}', 'EXECUTE') as ok`)).rows[0].ok
 
   it('로그인하지 않은 사람은 권한 확인 함수와 가입 후보 함수를 부를 수 없다', async () => {
-    for (const call of ['public.is_admin()', 'public.is_approved()', 'public.is_superadmin()', 'public.current_member_id()', 'public.signup_candidates(19)']) {
+    for (const call of ['public.is_admin()', 'public.is_approved()', 'public.is_superadmin()', 'public.current_member_id()', 'public.signup_candidates(19)', 'public.signup_cohorts()']) {
       await expect(rows(null, `select * from ${call}`)).rejects.toThrow(/permission denied/)
     }
   })
@@ -546,7 +583,7 @@ describe('함수 실행 권한', () => {
   })
 
   it('로그인한 사람에게는 정책과 앱이 쓰는 함수의 실행 권한이 있다', async () => {
-    for (const sig of ['public.is_approved()', 'public.is_admin()', 'public.is_superadmin()', 'public.current_member_id()', 'public.signup_candidates(int)']) {
+    for (const sig of ['public.is_approved()', 'public.is_admin()', 'public.is_superadmin()', 'public.current_member_id()', 'public.signup_candidates(int)', 'public.signup_cohorts()']) {
       expect([sig, await canExec('authenticated', sig)]).toEqual([sig, true])
     }
   })
