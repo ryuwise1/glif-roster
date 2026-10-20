@@ -24,7 +24,7 @@ insert into public.job_functions (name, sort) values
 
 -- 공통: 수정 시각과 수정자
 create function public.touch_updated() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   new.updated_by := auth.uid();
@@ -91,7 +91,7 @@ create trigger careers_touch before update on public.careers
 -- 계정 연결 (로그인 계정 ↔ 사람)
 create table public.accounts (
   user_id uuid primary key references auth.users (id) on delete cascade,
-  member_id uuid references public.members (id) on delete set null,
+  member_id uuid references public.members (id) on delete restrict,
   claimed_name text,
   claimed_cohort int,
   status public.account_status not null default '대기',
@@ -100,8 +100,38 @@ create table public.accounts (
   decided_at timestamptz,
   decided_by uuid,
   reject_reason text,
+  check (claimed_name is null or length(trim(claimed_name)) > 0),
+  check (claimed_cohort is null or claimed_cohort >= 1),
   check (member_id is not null or (claimed_name is not null and claimed_cohort is not null)),
   check (status <> '승인' or member_id is not null)
 );
 create unique index accounts_one_approved_per_member
   on public.accounts (member_id) where status = '승인';
+
+-- 직접 입력한 기수도 현재 기수를 넘을 수 없다
+create function public.check_claimed_cohort() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  max_cohort int := (select current_cohort from public.settings);
+begin
+  if new.claimed_cohort > max_cohort then
+    raise exception '기수는 현재 기수(%)보다 클 수 없습니다', max_cohort;
+  end if;
+  return new;
+end $$;
+
+create trigger accounts_check_claimed_cohort before insert or update of claimed_cohort on public.accounts
+  for each row execute function public.check_claimed_cohort();
+
+-- 계정이나 가입 신청이 연결된 학회원은 삭제할 수 없다
+create function public.block_member_delete() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.accounts where member_id = old.id) then
+    raise exception '계정이나 가입 신청이 연결된 학회원은 삭제할 수 없습니다. 먼저 연결된 계정을 해제하세요';
+  end if;
+  return old;
+end $$;
+
+create trigger members_block_delete before delete on public.members
+  for each row execute function public.block_member_delete();
