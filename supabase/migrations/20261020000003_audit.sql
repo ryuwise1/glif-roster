@@ -13,8 +13,8 @@ create table public.audit_log (
 
 -- 읽기는 관리자만, 쓰기는 아래 트리거(소유자 권한)만 한다
 alter table public.audit_log enable row level security;
-revoke all on public.audit_log from anon;
-revoke insert, update, delete on public.audit_log from authenticated;
+revoke all on public.audit_log from public, anon, authenticated;
+grant select on public.audit_log to authenticated;
 create policy audit_admin_read on public.audit_log for select to authenticated using (public.is_admin());
 
 create function public.write_audit() returns trigger
@@ -38,6 +38,9 @@ begin
   );
   return null; -- after 트리거라 반환값은 쓰이지 않는다
 end $$;
+
+-- 트리거 전용 함수라 직접 호출 권한은 아무에게도 주지 않는다
+revoke execute on function public.write_audit() from public, anon, authenticated;
 
 create trigger members_audit after insert or update or delete on public.members
   for each row execute function public.write_audit();

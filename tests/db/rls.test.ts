@@ -227,3 +227,25 @@ describe('설정과 목록', () => {
     expect(await rows(U.member, `select * from public.industries where name = '에너지'`)).toHaveLength(1)
   })
 })
+
+describe('표 비우기 권한', () => {
+  // TRUNCATE 는 RLS 와 행 트리거(수정 기록)를 건너뛰므로 로그인한 사람에게 주지 않는다
+  it.each(['members', 'careers', 'accounts'])('관리자도 %s 표를 비울 수 없다', async (table) => {
+    const count = async () => (await rows(U.super, `select count(*)::int as n from public.${table}`))[0].n
+    const before = await count()
+    await expect(asUser(db, U.admin, () => db.exec(`truncate public.${table}`))).rejects.toThrow(/permission denied/)
+    expect(await count()).toBe(before)
+  })
+
+  it('로그인한 사람에게는 어떤 표의 TRUNCATE·REFERENCES·TRIGGER 권한도 없다', async () => {
+    const tables = ['settings', 'industries', 'job_functions', 'members', 'careers', 'accounts', 'audit_log']
+    for (const t of tables) {
+      for (const priv of ['TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+        const { rows: [r] } = await db.query<{ ok: boolean }>(
+          `select has_table_privilege('authenticated', 'public.${t}', '${priv}') as ok`,
+        )
+        expect([t, priv, r.ok]).toEqual([t, priv, false])
+      }
+    }
+  })
+})

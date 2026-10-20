@@ -79,4 +79,16 @@ describe('수정 기록', () => {
     ).rejects.toThrow(/permission denied/)
     await expect(asUser(db, U.admin, () => db.exec(`delete from public.audit_log`))).rejects.toThrow(/permission denied/)
   })
+
+  it('관리자도 수정 기록을 비울 수 없다', async () => {
+    await asUser(db, U.admin, () => db.exec(`update public.members set department = 'x' where id = '${M.member}'`))
+    const before = (await rows(U.super, 'select count(*)::int as n from public.audit_log'))[0].n
+    expect(before).toBeGreaterThan(0)
+    await expect(asUser(db, U.admin, () => db.exec('truncate public.audit_log'))).rejects.toThrow(/permission denied/)
+    expect((await rows(U.super, 'select count(*)::int as n from public.audit_log'))[0].n).toBe(before)
+  })
+
+  it('수정 기록 함수는 직접 부를 수 없다', async () => {
+    await expect(asUser(db, U.admin, () => db.exec('select public.write_audit()'))).rejects.toThrow(/permission denied/)
+  })
 })
