@@ -1,6 +1,6 @@
 // 연명부 엑셀을 'GLIF Network 서버' 시트 형식으로 정리한다.
 //
-//   node scripts/import/network-sheet.mjs [엑셀 경로] [명단 HTML 경로]
+//   node scripts/import/network-sheet.mjs [엑셀 경로] [명단 HTML 경로] [추가 학회원 파일]
 //
 // 만드는 파일: private/GLIF Network 서버.xlsx  (/private/ 아래라 git 에 올라가지 않는다)
 //   시트 이름 '연명부', 1행 헤더: 학번 | 기수 | 성함 | 직장명 | 부서명 | 연락처
@@ -9,11 +9,22 @@
 //   - 엑셀에는 있지만 명단에 없는 사람은 기수를 '비학회원'으로 두고 맨 아래에 모은다
 //   - 학번 열은 텍스트로 저장해 '2.02E+09' 처럼 깨지지 않게 한다
 import ExcelJS from 'exceljs'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseMembers } from './glifskku-members.mjs'
 import { buildImport, readWorkbook, resolveMember } from './excel-roster.mjs'
+
+// 사이트 명단에 아직 없는 학회원(예: 새 기수)을 줄마다 '기수 학과 학번 이름' 으로 적은 파일을 읽는다.
+//   20 글로벌경영 22 홍길동
+export function parseExtraMembers(text) {
+  const members = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.trim().match(/^(\d+)\s+(\S+)\s+(\d{1,2})\s+(.+)$/)
+    if (m) members.push({ cohort: Number(m[1]), name: m[4].trim(), role: null, department: m[2], studentYear: Number(m[3]) })
+  }
+  return members
+}
 
 export const HEADERS = ['학번', '기수', '성함', '직장명', '부서명', '연락처']
 export const NON_MEMBER = '비학회원'
@@ -100,17 +111,30 @@ export async function writeSheet(rows, path) {
   await wb.xlsx.writeFile(path)
 }
 
+const csvCell = (v) => {
+  const t = String(v ?? '')
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+}
+export const toCsv = (rows) => [HEADERS, ...rows].map((r) => r.map(csvCell).join(',')).join('\n') + '\n'
+
 async function main() {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const xlsx = process.argv[2] ?? join(root, 'private', 'roster.xlsx')
   const html = process.argv[3] ? readFileSync(process.argv[3], 'utf8') : await (await fetch('https://glifskku.com/members.html')).text()
   const members = parseMembers(html).members
+  const extraPath = process.argv[4] ?? join(root, 'private', 'extra-members.txt')
+  if (existsSync(extraPath)) {
+    for (const x of parseExtraMembers(readFileSync(extraPath, 'utf8'))) {
+      if (!members.some((m) => m.cohort === x.cohort && m.name === x.name)) members.push(x)
+    }
+  }
   const data = await readWorkbook(xlsx)
   const { rows, counts } = buildSheetRows(data, members)
 
   mkdirSync(join(root, 'private'), { recursive: true })
   const out = join(root, 'private', 'GLIF Network 서버.xlsx')
   await writeSheet(rows, out)
+  writeFileSync(join(root, 'private', 'GLIF Network 서버.csv'), toCsv(rows), 'utf8')
 
   console.log(`학회원 ${counts.members}명 (${counts.cohorts}개 기수), 비학회원 ${counts.outsiders}명, 전체 ${counts.rows}줄`)
   console.log(`현직 정보 있는 사람: ${counts.withJob}명 / 연락처 있는 사람: ${counts.withContact}명 / 겸직으로 늘어난 줄: ${counts.multiJob}줄`)
