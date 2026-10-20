@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# GLIF: 개인정보·원본 데이터는 절대 커밋하지 않는다
+*.xlsx
+*.xls
+*.csv
+/private/
+!.env.example
