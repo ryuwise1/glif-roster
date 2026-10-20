@@ -76,6 +76,14 @@ export function parsePeriod(raw) {
 // ---------- 시트 읽기 ----------
 const placeholder = (s) => !s || /^[-–—.]+$/.test(s)
 
+// 회색 글씨(예: B7B7B7·999999·CCCCCC)는 연명부에서 "이전 직장" 표시다. 세 색 성분이 같은 밝은 회색이면 회색으로 본다.
+export function isGrayFont(cell) {
+  const m = /^(?:FF)?([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(cell.font?.color?.argb ?? '')
+  if (!m || m[1] !== m[2] || m[2] !== m[3]) return false
+  const level = parseInt(m[1], 16)
+  return level >= 0x60 && level <= 0xee
+}
+
 // 현직 시트: '< 현직자 명단 >' '< 삼성증권 인턴 명단>' '< 인턴 명단 >' 소제목 아래로 한 줄에 한 명
 function readCurrentSheet(ws, issues) {
   const h = headerRow(ws, '성함', '직장명')
@@ -107,7 +115,8 @@ function readCurrentSheet(ws, issues) {
     if (EMAIL.test(contact)) row.email = contact.toLowerCase()
     else if (PHONE.test(contact)) row.phone = contact
     if (!placeholder(company)) {
-      const career = { kind: section === 'current' ? '정규' : '인턴', isCurrent: section === 'current', company, team: placeholder(team) ? null : team, title: null, startedOn: null, endedOn: null }
+      const past = isGrayFont(ws.getCell(r, col['직장명']))
+      const career = { kind: section === 'current' ? '정규' : '인턴', isCurrent: section === 'current' && !past, company, team: placeholder(team) ? null : team, title: null, startedOn: null, endedOn: null }
       if (section !== 'current') {
         const p = parsePeriod(contact)
         if (p) Object.assign(career, { startedOn: p.startedOn, endedOn: p.endedOn })
@@ -300,6 +309,22 @@ where not exists (
   where c.member_id = m.id and c.kind = s.kind::public.career_kind and c.company = s.company
     and coalesce(c.team, '') = coalesce(s.team, '') and c.started_on is not distinct from s.started_on::date
 );
+`)
+  }
+  // 예전에 현직으로 들어간 이전 직장(회색 글씨)을 이전 직장으로 고친다
+  const past = careers.filter(({ c }) => !c.isCurrent && c.kind === '정규' && c.startedOn === null)
+  if (past.length) {
+    parts.push(`-- 이전 직장 표시 (${past.length}건)
+with src(name, cohort, company, team) as (
+  values
+${past.map(({ m, c }) => `  (${q(m.name)}, ${m.cohort}, ${q(c.company)}, ${v(c.team)})`).join(',\n')}
+)
+update public.careers c
+set is_current = false
+from src s
+join public.members m on m.name = s.name and m.cohort = s.cohort::int
+where c.member_id = m.id and c.is_current and c.kind = '정규' and c.company = s.company
+  and coalesce(c.team, '') = coalesce(s.team, '');
 `)
   }
   return parts.join('\n')

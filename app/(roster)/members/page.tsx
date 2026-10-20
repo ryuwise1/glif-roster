@@ -1,9 +1,9 @@
-import { Suspense, type ReactNode } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { requireApproved } from '@/lib/auth'
 import { loadRoster } from '@/lib/roster-data'
 import { filterMembers, paginate, parseFilters, type Career, type Filters, type RosterRow } from '@/lib/roster'
-import { AppFrame, CohortLabel, DoneNote, PageHeader, cardClass, inputClass, buttonClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, CohortLabel, DoneNote, Hero, UnderlineTab, UnderlineTabs, inputClass, buttonClass, subtleButtonClass } from '@/components/shell'
 
 export default function MembersPage({ searchParams }: PageProps<'/members'>) {
   return (
@@ -37,20 +37,20 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
   const isFiltered = Boolean(filters.q || filters.cohort !== null || filters.industry || filters.jobFunction)
 
   return (
-    <AppFrame email={email} isAdmin={isAdmin} active="members" wide>
-      <PageHeader
-        title="GLIF 연명부"
-        desc={cohorts.length ? `${cohorts[0]}기~${cohorts.at(-1)}기 · ${members.length}명` : undefined}
-        action={isAdmin && <Link href="/admin/members/new" className={buttonClass}>학회원 추가</Link>}
-      />
+    <AppFrame
+      email={email}
+      isAdmin={isAdmin}
+      active="members"
+      hero={<Hero title="Directory" sub={`성균관대학교 금융투자학회 GLIF 학회원 연명부${cohorts.length ? ` · ${cohorts[0]}기~${cohorts.at(-1)}기 ${members.length}명` : ''}`} />}
+    >
       {params.done === 'deleted' && <DoneNote>학회원을 삭제했습니다.</DoneNote>}
 
-      <nav aria-label="기수" className="scrollbar-none -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        <CohortTab href={pageHref({ ...filters, cohort: null }, 1)} active={filters.cohort === null}>전체</CohortTab>
+      <UnderlineTabs label="기수">
+        <UnderlineTab href={pageHref({ ...filters, cohort: null }, 1)} active={filters.cohort === null}>전체</UnderlineTab>
         {cohorts.map((c) => (
-          <CohortTab key={c} href={pageHref({ ...filters, cohort: c }, 1)} active={filters.cohort === c}>{c}기</CohortTab>
+          <UnderlineTab key={c} href={pageHref({ ...filters, cohort: c }, 1)} active={filters.cohort === c}>{c}기</UnderlineTab>
         ))}
-      </nav>
+      </UnderlineTabs>
 
       <form method="get" className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
         {filters.cohort !== null && <input type="hidden" name="cohort" value={filters.cohort} />}
@@ -72,24 +72,27 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
         </div>
       </form>
 
-      <section className={`${cardClass} !p-0`}>
-        <div className="flex items-center justify-between border-b border-line px-5 py-3 sm:px-6">
-          <h2 className="text-sm font-bold text-ink" aria-live="polite">
+      <section>
+        <div className="flex items-center justify-between gap-3 pb-3">
+          <h2 className="text-base font-bold text-ink" aria-live="polite">
             {isFiltered ? `검색 결과 ${filtered.length}명` : `${filters.cohort === null ? '전체' : `${filters.cohort}기`} ${filtered.length}명`}
           </h2>
-          {pages > 1 && <span className="text-xs text-muted">{page} / {pages}쪽</span>}
+          <div className="flex items-center gap-3">
+            {pages > 1 && <span className="text-xs text-muted">{page} / {pages}쪽</span>}
+            {isAdmin && <Link href="/admin/members/new" className={subtleButtonClass}>학회원 추가</Link>}
+          </div>
         </div>
 
         {items.length === 0 ? (
-          <p className="p-10 text-center text-sm text-muted">
+          <p className="border-y border-line p-10 text-center text-sm text-muted">
             {members.length === 0 ? '등록된 학회원이 없습니다.' : '조건에 맞는 학회원이 없습니다.'}
           </p>
         ) : (
           <>
-            {/* 컴퓨터: 원래 연명부처럼 항목마다 칸을 나눈 표 */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[68rem] text-left text-sm">
-                <thead className="bg-paper text-xs text-slate">
+            {/* 컴퓨터: 원래 연명부처럼 항목마다 칸을 나눈 표. 이전 직장은 상세 화면에서 본다 */}
+            <div className="hidden overflow-x-auto border-t-2 border-navy md:block">
+              <table className="w-full min-w-[60rem] text-left text-sm">
+                <thead className="border-b border-line bg-paper text-xs text-slate">
                   <tr className="[&>th]:whitespace-nowrap [&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold">
                     <th className="!pl-6">기수</th>
                     <th>이름</th>
@@ -98,11 +101,10 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
                     <th>직급</th>
                     <th>업종</th>
                     <th>직무</th>
-                    <th>연락처</th>
-                    <th className="!pr-6">전 직장</th>
+                    <th className="!pr-6">연락처</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-line border-b border-line">
                   {items.map((r) => (
                     <tr key={r.id} className="align-top transition-colors hover:bg-paper/60 [&>td]:px-3 [&>td]:py-3">
                       <td className="!pl-6 text-slate"><CohortLabel cohort={r.cohort} role={r.cohort_role} /></td>
@@ -114,11 +116,8 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
                       <JobCell jobs={r.current} pick={(c) => c.title} />
                       <JobCell jobs={r.current} pick={(c) => c.industry} />
                       <JobCell jobs={r.current} pick={(c) => c.job_function} />
-                      <td className="whitespace-nowrap leading-5">
+                      <td className="whitespace-nowrap !pr-6 leading-5">
                         {r.phone ? <a href={`tel:${r.phone}`} className="text-ink hover:text-navy">{r.phone}</a> : <Empty />}
-                      </td>
-                      <td className="max-w-56 !pr-6 leading-5 text-slate">
-                        {r.past.length ? <span className="line-clamp-2" title={r.past.map((c) => c.company).join(', ')}>{r.past.map((c) => c.company).join(', ')}</span> : <Empty />}
                       </td>
                     </tr>
                   ))}
@@ -127,14 +126,14 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
             </div>
 
             {/* 휴대폰: 줄 목록 */}
-            <ul className="divide-y divide-line md:hidden">
+            <ul className="divide-y divide-line border-y border-line md:hidden">
               {items.map((r) => <MemberRow key={r.id} r={r} />)}
             </ul>
           </>
         )}
 
         {pages > 1 && (
-          <nav className="flex items-center justify-between border-t border-line px-5 py-3 text-sm sm:px-6" aria-label="쪽 이동">
+          <nav className="flex items-center justify-between py-4 text-sm" aria-label="쪽 이동">
             {page > 1 ? <Link href={pageHref(filters, page - 1)} className={subtleButtonClass}>이전</Link> : <span />}
             <span className="text-xs font-semibold text-slate">{page} / {pages}</span>
             {page < pages ? <Link href={pageHref(filters, page + 1)} className={subtleButtonClass}>다음</Link> : <span />}
@@ -159,24 +158,10 @@ function JobCell({ jobs, pick, strong }: { jobs: Career[]; pick: (c: Career) => 
   )
 }
 
-function CohortTab({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? 'page' : undefined}
-      className={`shrink-0 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? 'border-navy bg-navy text-white' : 'border-line bg-white text-slate hover:border-navy hover:text-navy'
-      }`}
-    >
-      {children}
-    </Link>
-  )
-}
-
 function MemberRow({ r }: { r: RosterRow }) {
   return (
     <li>
-      <Link href={`/members/${r.id}`} className="flex items-center gap-3 px-5 py-3.5">
+      <Link href={`/members/${r.id}`} className="flex items-center gap-3 px-1 py-3.5">
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 font-semibold text-ink">
             {r.name}

@@ -32,6 +32,8 @@ async function makeFile(): Promise<string> {
   cur.mergeCells('B7:B8')
   cur.getRow(9).values = [undefined, 18, undefined, '동명이', '가짜공사', '기획팀', undefined] // 기수가 없고 학번 18 → 12기
   cur.getRow(10).values = [undefined, undefined, undefined, '명단없음', '가짜회사', undefined, undefined]
+  cur.getRow(11).values = [undefined, 21, 19, '가짜하나', '옛날증권', '채권팀', undefined] // 회색 글씨 = 이전 직장
+  for (let c = 2; c <= 7; c++) cur.getCell(11, c).font = { color: { argb: 'FFB7B7B7' } }
   cur.getCell('B12').value = '< 인턴 명단 >'
   cur.getRow(13).values = [undefined, '25\n하반기', '19기', '가짜하나', '가짜운용', '주식팀', '25.01~25.02']
   cur.getRow(14).values = [undefined, '25\n하반기', '18기', '가짜둘', '가짜투자', undefined, '24.下']
@@ -84,7 +86,7 @@ describe('엑셀 읽기', () => {
   it('인턴 명단의 "25 하반기"를 학번으로 읽지 않고, 병합된 학번은 아래 줄에도 적용한다', async () => {
     const data = await readWorkbook(await makeFile())
     const byName = (n: string) => data.current.filter((r: { name: string }) => r.name === n)
-    expect(byName('가짜하나').map((r: { studentYear: number | null }) => r.studentYear)).toEqual([21, null])
+    expect(byName('가짜하나').map((r: { studentYear: number | null }) => r.studentYear)).toEqual([21, 21, null])
     expect(byName('가짜셋')[0].studentYear).toBe(20) // 병합 셀
   })
 
@@ -103,7 +105,8 @@ describe('엑셀 읽기', () => {
     const current = careers.filter((c: { isCurrent: boolean }) => c.isCurrent)
     expect(current).toHaveLength(1)
     expect(current[0]).toMatchObject({ company: '가짜증권', title: 'Associate', startedOn: '2021-10-01', team: '리서치센터' })
-    expect(careers.map((c: { company: string }) => c.company).sort()).toEqual(['가짜운용', '가짜은행', '가짜증권'])
+    expect(careers.map((c: { company: string }) => c.company).sort()).toEqual(['가짜운용', '가짜은행', '가짜증권', '옛날증권'])
+    expect(careers.find((c: { company: string }) => c.company === '옛날증권')).toMatchObject({ isCurrent: false, team: '채권팀' })
   })
 
   it('이력 시트의 인턴 직위는 인턴 경력이 된다', async () => {
@@ -162,6 +165,20 @@ describe('만든 SQL', () => {
     const first = await count('careers')
     await db.exec(await sql())
     expect(await count('careers')).toBe(first)
+  })
+
+  it('예전에 현직으로 들어간 회색 글씨 직장을 이전 직장으로 고친다', async () => {
+    await db.exec(`insert into public.careers (member_id, kind, is_current, company, team)
+      select id, '정규', true, '옛날증권', '채권팀' from public.members where name = '가짜하나'`)
+    await db.exec(await sql())
+    const r = await db.query(
+      `select c.company, c.is_current from public.careers c join public.members m on m.id = c.member_id where m.name = '가짜하나' and c.kind = '정규' order by c.company`,
+    )
+    expect(r.rows).toEqual([
+      { company: '가짜은행', is_current: false },
+      { company: '가짜증권', is_current: true },
+      { company: '옛날증권', is_current: false },
+    ])
   })
 
   it('이미 있는 연락처는 덮어쓰지 않는다', async () => {

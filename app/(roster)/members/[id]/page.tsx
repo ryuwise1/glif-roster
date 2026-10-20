@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation'
 import { requireApproved } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
-import { describeCareer, yearMonth, type Career, type DirectoryMember } from '@/lib/roster'
-import { AppFrame, Badge, CohortLabel, PageHeader, SectionTitle, cardClass, subtleButtonClass } from '@/components/shell'
+import { yearMonth, type Career, type DirectoryMember } from '@/lib/roster'
+import { AppFrame, Badge, CohortLabel, cardClass, subtleButtonClass } from '@/components/shell'
+import { MemberPhoto } from '@/components/member-photo'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -35,10 +36,11 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
     .from('careers')
     .select(CAREER_COLUMNS)
     .eq('member_id', id)
-    .order('is_current', { ascending: false })
     .order('started_on', { ascending: false, nullsFirst: false })
     .overrideTypes<Career[], { merge: false }>()
   const careers = data ?? []
+  const current = careers.filter((c) => c.is_current)
+  const past = careers.filter((c) => !c.is_current)
 
   const school = [member.department, member.student_year !== null ? `${String(member.student_year).padStart(2, '0')}학번` : null]
     .filter(Boolean)
@@ -52,63 +54,89 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
 
   return (
     <AppFrame email={email} isAdmin={isAdmin} active="members">
-      <PageHeader
-        title={member.name}
-        desc={<CohortLabel cohort={member.cohort} role={member.cohort_role} />}
-        action={
-          <div className="flex gap-2">
-            <Link href="/members" className={subtleButtonClass}>목록</Link>
-            {isAdmin && <Link href={`/admin/members/${member.id}`} className={subtleButtonClass}>수정</Link>}
-          </div>
-        }
-      />
-      <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-        <section className={`${cardClass} self-start`}>
-          <SectionTitle title="기본 정보" />
-          <dl className="grid grid-cols-[5.5rem_1fr] gap-y-3 text-sm">
-            <dt className="text-slate">기수</dt>
-            <dd className="font-medium"><CohortLabel cohort={member.cohort} role={member.cohort_role} /></dd>
-            <dt className="text-slate">학과·학번</dt>
-            <dd className="font-medium">{school || <span className="text-muted">-</span>}</dd>
+      <div className="mb-6 flex items-center justify-between gap-2 text-sm">
+        <Link href="/members" className="text-slate hover:text-ink">← 연명부</Link>
+        {isAdmin && <Link href={`/admin/members/${member.id}`} className={subtleButtonClass}>정보 수정</Link>}
+      </div>
+
+      {/* 프로필 머리 */}
+      <section className="flex flex-col gap-5 border-b border-line pb-8 sm:flex-row sm:items-center">
+        <MemberPhoto name={member.name} cohort={member.cohort} />
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold tracking-tight text-ink">{member.name}</h1>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[15px] text-slate">
+            <CohortLabel cohort={member.cohort} role={member.cohort_role} />
+            {school && <span>· {school}</span>}
+          </p>
+          {current.map((c) => (
+            <p key={c.id} className="mt-1 text-[15px] font-medium text-ink">
+              {[c.company, c.team, c.title].filter(Boolean).join(' · ')}
+            </p>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
+        <section>
+          <h2 className="mb-2 text-lg font-bold text-ink">경력</h2>
+          {careers.length === 0 ? (
+            <p className="border-t border-line py-8 text-sm text-muted">등록된 경력이 없습니다.</p>
+          ) : (
+            <>
+              <CareerList title="현직" items={current} />
+              <CareerList title="이전 경력" items={past} />
+            </>
+          )}
+        </section>
+
+        <aside className={`${cardClass} self-start`}>
+          <h2 className="mb-3 text-base font-bold text-ink">연락처</h2>
+          <dl className="space-y-3 text-sm">
             {contacts.map((c) => (
-              <div key={c.label} className="contents">
-                <dt className="text-slate">{c.label}</dt>
-                <dd className="break-all font-medium">
-                  {c.href ? <a href={c.href} className="text-navy underline-offset-2 hover:underline">{c.value}</a> : <span className="text-muted">-</span>}
+              <div key={c.label}>
+                <dt className="text-xs text-slate">{c.label}</dt>
+                <dd className="mt-0.5 break-all font-medium">
+                  {c.href ? <a href={c.href} className="text-navy hover:underline">{c.value}</a> : <span className="text-muted">-</span>}
                 </dd>
               </div>
             ))}
           </dl>
-        </section>
-
-        <section className={cardClass}>
-          <SectionTitle title="경력" />
-          {careers.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">등록된 경력이 없습니다.</p>
-          ) : (
-            <ol className="relative space-y-5 border-l border-line pl-5">
-              {careers.map((c) => (
-                <li key={c.id} className="relative">
-                  <span aria-hidden className={`absolute -left-[25px] top-1.5 size-2.5 rounded-full border-2 ${c.is_current ? 'border-navy bg-navy' : 'border-line bg-white'}`} />
-                  <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
-                    {describeCareer(c)}
-                    {c.is_current && <Badge tone="navy">현직</Badge>}
-                    {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
-                  </p>
-                  {(c.industry || c.job_function || c.region) && (
-                    <p className="mt-0.5 text-sm text-slate">{[[c.industry, c.job_function].filter(Boolean).join(' · '), c.region].filter(Boolean).join(' / ')}</p>
-                  )}
-                  {(c.started_on || c.ended_on) && (
-                    <p className="mt-0.5 font-display text-xs font-medium text-muted">
-                      {yearMonth(c.started_on) ?? '?'} – {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+        </aside>
       </div>
     </AppFrame>
+  )
+}
+
+// LinkedIn 경력처럼 회사 → 부서·직급 → 기간 순서로 한 줄씩
+function CareerList({ title, items }: { title: string; items: Career[] }) {
+  if (!items.length) return null
+  return (
+    <div className="mt-4">
+      <h3 className="mb-1 text-sm font-semibold text-slate">{title}</h3>
+      <ul className="divide-y divide-line border-y border-line">
+        {items.map((c) => (
+          <li key={c.id} className="flex gap-4 py-4">
+            <span aria-hidden className="flex size-12 shrink-0 items-center justify-center rounded bg-paper text-lg font-bold text-navy">
+              {c.company.slice(0, 1)}
+            </span>
+            <div className="min-w-0">
+              <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
+                {c.company}
+                {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
+              </p>
+              {(c.team || c.title) && <p className="text-sm text-ink">{[c.team, c.title].filter(Boolean).join(' · ')}</p>}
+              {(c.started_on || c.ended_on) && (
+                <p className="text-sm text-muted">
+                  {yearMonth(c.started_on) ?? '?'} – {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
+                </p>
+              )}
+              {(c.industry || c.job_function || c.region) && (
+                <p className="mt-1 text-xs text-slate">{[c.industry, c.job_function, c.region].filter(Boolean).join(' · ')}</p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
