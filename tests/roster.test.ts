@@ -19,8 +19,8 @@ const careers = [
 const none = parseFilters({})
 
 describe('목록 정렬', () => {
-  it('기수 내림차순, 같은 기수에서는 회장·부회장이 먼저 나온다', () => {
-    expect(filterMembers(members, careers, none).map((r) => r.name)).toEqual(['사아자', '라마바', '가나다', '차카타'])
+  it('1기부터 기수 오름차순, 같은 기수에서는 회장·부회장이 먼저 나온다', () => {
+    expect(filterMembers(members, careers, none).map((r) => r.name)).toEqual(['차카타', '가나다', '사아자', '라마바'])
   })
 })
 
@@ -51,9 +51,19 @@ describe('필터', () => {
     expect(filterMembers(members, careers, parseFilters({ industry: '금융', cohort: '20' }))).toEqual([])
     expect(filterMembers(members, careers, parseFilters({ industry: '금융', cohort: '19' })).map((r) => r.id)).toEqual(['a'])
   })
-  it('행에는 현직 경력만 담긴다', () => {
+  it('행에는 현직과 전 직장이 나뉘어 담긴다', () => {
     const [row] = filterMembers(members, careers, parseFilters({ q: '가나다' }))
     expect(row.current.map((x) => x.company)).toEqual(['가짜증권'])
+    expect(row.past.map((x) => x.company)).toEqual(['옛날운용'])
+  })
+  it('전 직장은 최근에 시작한 것부터, 날짜 없는 것은 뒤에 둔다', () => {
+    const past = [
+      c('d', '날짜없음', { is_current: false }),
+      c('d', '예전회사', { is_current: false, started_on: '2015-03-01' }),
+      c('d', '최근회사', { is_current: false, started_on: '2020-03-01' }),
+    ]
+    const [row] = filterMembers(members, past, parseFilters({ q: '차카타' }))
+    expect(row.past.map((x) => x.company)).toEqual(['최근회사', '예전회사', '날짜없음'])
   })
 })
 

@@ -30,7 +30,7 @@ export type Career = {
 }
 
 export type Filters = { q: string; cohort: number | null; industry: string; jobFunction: string; page: number }
-export type RosterRow = DirectoryMember & { current: Career[] }
+export type RosterRow = DirectoryMember & { current: Career[]; past: Career[] }
 
 export const PAGE_SIZE = 50
 
@@ -70,12 +70,13 @@ export function filterMembers(members: DirectoryMember[], careers: Career[], f: 
     if (f.industry && !current.some((c) => c.industry === f.industry)) continue
     if (f.jobFunction && !current.some((c) => c.job_function === f.jobFunction)) continue
     if (q && !norm(m.name).includes(q) && !all.some((c) => norm(c.company).includes(q) || norm(c.team).includes(q))) continue
-    rows.push({ ...m, current })
+    const past = all.filter((c) => !c.is_current).sort((x, y) => (y.started_on ?? '').localeCompare(x.started_on ?? ''))
+    rows.push({ ...m, current, past })
   }
 
   const roleRank = (r: CohortRole | null) => (r === '회장' ? 0 : r === '부회장' ? 1 : 2)
   return rows.sort(
-    (a, b) => b.cohort - a.cohort || roleRank(a.cohort_role) - roleRank(b.cohort_role) || a.name.localeCompare(b.name, 'ko'),
+    (a, b) => a.cohort - b.cohort || roleRank(a.cohort_role) - roleRank(b.cohort_role) || a.name.localeCompare(b.name, 'ko'),
   )
 }
 

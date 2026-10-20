@@ -51,7 +51,7 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
 
   return (
     <AppFrame email={email} isAdmin active="approvals">
-      <PageHeader eyebrow="Admin" title="가입 승인" desc={loadError ? undefined : `대기 중인 신청 ${list.length}건`} />
+      <PageHeader title="가입 승인" desc={loadError ? undefined : `대기 ${list.length}건`} />
       {error && <ErrorNote>{error}</ErrorNote>}
       {done && <DoneNote>{done}</DoneNote>}
 
@@ -64,7 +64,7 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
         <>
           {linkedCount > 0 && (
             <form id="bulk" action={approveMany} className="mb-4 flex flex-col gap-3 rounded-lg border border-navy/20 bg-white p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-slate">로그인 이름과 연명부 이름이 같은 신청은 미리 체크해 두었습니다. 프로필 이름은 본인이 바꿀 수 있으니 확인한 뒤 승인하세요.</p>
+              <p className="text-slate">로그인 이름이 연명부 이름과 같은 신청은 미리 체크했습니다. 구글 이름은 본인이 바꿀 수 있으니 한 번 더 보고 승인하세요.</p>
               <button type="submit" className={`${buttonClass} shrink-0`}>체크한 신청 승인</button>
             </form>
           )}

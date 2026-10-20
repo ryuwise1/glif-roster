@@ -11,7 +11,7 @@ const ERRORS: Record<string, string> = {
 
 export default function LoginPage({ searchParams }: PageProps<'/login'>) {
   return (
-    <Suspense fallback={<Shell eyebrow="Member Directory" title="GLIF 연명부">{null}</Shell>}>
+    <Suspense fallback={<Shell title="GLIF 연명부">{null}</Shell>}>
       <Login searchParams={searchParams} />
     </Suspense>
   )
@@ -24,9 +24,9 @@ async function Login({ searchParams }: { searchParams: PageProps<'/login'>['sear
   const message = typeof error === 'string' ? ERRORS[error] : undefined
 
   return (
-    <Shell eyebrow="Member Directory" title="GLIF 연명부">
+    <Shell title="GLIF 연명부">
       <p className="mb-6 text-sm leading-6 text-slate">
-        성균관대학교 금융투자학회 GLIF 학회원 전용 연명부입니다. 구글 계정으로 로그인한 뒤 가입을 신청하면, 회장 승인을 거쳐 열람할 수 있습니다.
+        학회원만 볼 수 있습니다. 로그인 후 가입 신청을 하면 회장 확인을 거쳐 열립니다.
       </p>
       {message && <ErrorNote>{message}</ErrorNote>}
       <form action={signInWithGoogle}>
@@ -35,7 +35,7 @@ async function Login({ searchParams }: { searchParams: PageProps<'/login'>['sear
           className="inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded border border-line bg-white px-5 text-sm font-semibold text-ink transition-colors hover:border-navy"
         >
           <GoogleMark />
-          Google 계정으로 로그인
+          Google로 로그인
         </button>
       </form>
     </Shell>

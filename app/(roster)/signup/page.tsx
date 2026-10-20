@@ -14,7 +14,7 @@ const ERRORS: Record<string, string> = {
 
 export default function SignupPage({ searchParams }: PageProps<'/signup'>) {
   return (
-    <Suspense fallback={<Shell eyebrow="Application" title="가입 신청">{null}</Shell>}>
+    <Suspense fallback={<Shell title="가입 신청">{null}</Shell>}>
       <Signup searchParams={searchParams} />
     </Suspense>
   )
@@ -36,7 +36,7 @@ async function Signup({ searchParams }: { searchParams: PageProps<'/signup'>['se
   const people = (candidates as { id: string; name: string }[] | null) ?? []
 
   return (
-    <Shell eyebrow="Application" title="가입 신청">
+    <Shell title="가입 신청">
       <p className="mb-5 text-sm leading-6 text-slate">
         <span className="font-medium text-ink">{access.email ?? '로그인한 계정'}</span>으로 로그인했습니다. 기수를 고르고 본인 이름을 선택하면 회장에게 승인 요청이 갑니다.
       </p>

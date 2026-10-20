@@ -22,9 +22,8 @@ async function NewMember() {
   return (
     <AppFrame email={email} isAdmin active="members">
       <PageHeader
-        eyebrow="Admin"
         title="학회원 추가"
-        desc="기본 정보를 저장하면 이어서 경력을 넣을 수 있습니다."
+        desc="저장한 뒤 경력을 넣을 수 있습니다."
         action={<Link href="/members" className={subtleButtonClass}>취소</Link>}
       />
       <section className={cardClass}>

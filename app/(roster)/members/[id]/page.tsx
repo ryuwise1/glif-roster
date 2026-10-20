@@ -5,7 +5,7 @@ import { requireApproved } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
 import { describeCareer, yearMonth, type Career, type DirectoryMember } from '@/lib/roster'
-import { AppFrame, Badge, Banner, RoleBadge, SectionTitle, cardClass } from '@/components/shell'
+import { AppFrame, Badge, CohortLabel, PageHeader, SectionTitle, cardClass, subtleButtonClass } from '@/components/shell'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -44,21 +44,6 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
     .filter(Boolean)
     .join(' ')
 
-  const banner = (
-    <Banner eyebrow={`GLIF ${String(member.cohort).padStart(2, '0')}`} title={member.name} desc={[`${member.cohort}기`, member.cohort_role, school].filter(Boolean).join(' · ')}>
-      <div className="mt-6 flex flex-wrap gap-2">
-        <Link href="/members" className="inline-flex min-h-10 items-center rounded border border-white/40 px-4 text-sm font-medium text-white transition-colors hover:bg-white hover:text-navy">
-          ← 목록으로
-        </Link>
-        {isAdmin && (
-          <Link href={`/admin/members/${member.id}`} className="inline-flex min-h-10 items-center rounded bg-white px-4 text-sm font-semibold text-navy transition-colors hover:bg-white/90">
-            정보 편집
-          </Link>
-        )}
-      </div>
-    </Banner>
-  )
-
   const contacts = [
     { label: '휴대폰', value: member.phone, href: member.phone ? `tel:${member.phone}` : null },
     { label: '개인 이메일', value: member.personal_email, href: member.personal_email ? `mailto:${member.personal_email}` : null },
@@ -66,29 +51,38 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
   ]
 
   return (
-    <AppFrame email={email} isAdmin={isAdmin} active="members" banner={banner}>
+    <AppFrame email={email} isAdmin={isAdmin} active="members">
+      <PageHeader
+        title={member.name}
+        desc={<CohortLabel cohort={member.cohort} role={member.cohort_role} />}
+        action={
+          <div className="flex gap-2">
+            <Link href="/members" className={subtleButtonClass}>목록</Link>
+            {isAdmin && <Link href={`/admin/members/${member.id}`} className={subtleButtonClass}>수정</Link>}
+          </div>
+        }
+      />
       <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
         <section className={`${cardClass} self-start`}>
-          <SectionTitle eyebrow="Profile" title="기본 정보" />
+          <SectionTitle title="기본 정보" />
           <dl className="grid grid-cols-[5.5rem_1fr] gap-y-3 text-sm">
             <dt className="text-slate">기수</dt>
-            <dd className="flex items-center gap-1.5 font-medium">{member.cohort}기 <RoleBadge role={member.cohort_role} /></dd>
+            <dd className="font-medium"><CohortLabel cohort={member.cohort} role={member.cohort_role} /></dd>
             <dt className="text-slate">학과·학번</dt>
-            <dd className="font-medium">{school || <span className="text-muted">—</span>}</dd>
+            <dd className="font-medium">{school || <span className="text-muted">-</span>}</dd>
             {contacts.map((c) => (
               <div key={c.label} className="contents">
                 <dt className="text-slate">{c.label}</dt>
                 <dd className="break-all font-medium">
-                  {c.href ? <a href={c.href} className="text-navy underline-offset-2 hover:underline">{c.value}</a> : <span className="text-muted">—</span>}
+                  {c.href ? <a href={c.href} className="text-navy underline-offset-2 hover:underline">{c.value}</a> : <span className="text-muted">-</span>}
                 </dd>
               </div>
             ))}
           </dl>
-          <p className="mt-4 border-t border-line pt-3 text-xs text-muted">“—”는 등록되지 않았거나 본인이 숨긴 항목입니다.</p>
         </section>
 
         <section className={cardClass}>
-          <SectionTitle eyebrow="Career" title="경력" />
+          <SectionTitle title="경력" />
           {careers.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">등록된 경력이 없습니다.</p>
           ) : (

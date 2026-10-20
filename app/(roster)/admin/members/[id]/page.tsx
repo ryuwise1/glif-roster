@@ -12,7 +12,7 @@ import { CareerForm, ConfirmButton, MemberForm, type EditableMember } from '../f
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const DONE: Record<string, string> = {
-  created: '학회원을 추가했습니다. 이어서 경력을 넣어 주세요.',
+  created: '학회원을 추가했습니다.',
   saved: '기본 정보를 저장했습니다.',
   career: '경력을 저장했습니다.',
   'career-deleted': '경력을 삭제했습니다.',
@@ -64,22 +64,21 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
   return (
     <AppFrame email={email} isAdmin active="members">
       <PageHeader
-        eyebrow="Admin · Edit"
-        title={member.name}
-        desc={`${member.cohort}기 학회원 정보를 고칩니다.`}
-        action={<Link href={`/members/${member.id}`} className={subtleButtonClass}>상세 보기</Link>}
+        title={`${member.name} 정보 수정`}
+        desc={`${member.cohort}기`}
+        action={<Link href={`/members/${member.id}`} className={subtleButtonClass}>돌아가기</Link>}
       />
       {done && <DoneNote>{done}</DoneNote>}
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <div className="space-y-6">
         <section className={cardClass}>
-          <SectionTitle eyebrow="Profile" title="기본 정보" />
+          <SectionTitle title="기본 정보" />
           <MemberForm action={updateMember} member={member} maxCohort={settings?.current_cohort ?? 100} submitLabel="기본 정보 저장" />
         </section>
 
         <section className={cardClass}>
-          <SectionTitle eyebrow="Career" title={`경력 ${careers.length}건`} />
+          <SectionTitle title={`경력 ${careers.length}건`} />
           {careers.length === 0 && <p className="mb-4 text-sm text-muted">등록된 경력이 없습니다.</p>}
           <ul className={careers.length ? 'divide-y divide-line border-y border-line' : 'hidden'}>
             {careers.map((c) => (
@@ -122,8 +121,8 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
         </section>
 
         <section className="rounded-lg border border-danger/30 bg-white p-5 sm:p-6">
-          <SectionTitle eyebrow="Danger" title="학회원 삭제" />
-          <p className="mb-4 text-sm text-slate">경력까지 함께 지워지고 되돌릴 수 없습니다. 계정이 연결된 학회원은 삭제할 수 없습니다.</p>
+          <SectionTitle title="학회원 삭제" />
+          <p className="mb-4 text-sm text-slate">경력도 함께 지워지며 되돌릴 수 없습니다. 계정이 연결된 학회원은 삭제되지 않습니다.</p>
           <form action={deleteMember}>
             <input type="hidden" name="id" value={member.id} />
             <ConfirmButton message={`${member.name} 학회원을 삭제할까요? 되돌릴 수 없습니다.`} className={dangerButtonClass}>학회원 삭제</ConfirmButton>
