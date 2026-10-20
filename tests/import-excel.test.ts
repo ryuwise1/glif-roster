@@ -16,6 +16,7 @@ const MEMBERS: Member[] = [
   { name: '동명이', cohort: 12, studentYear: 18 },
   { name: '동명이', cohort: 13, studentYear: 19 },
   { name: '가짜회장', cohort: 19, studentYear: null },
+  { name: '가짜인턴', cohort: 19, studentYear: null }, // 정규 현직 없이 인턴만
 ]
 
 // 실제 파일과 같은 모양으로 가짜 엑셀을 만든다
@@ -38,6 +39,8 @@ async function makeFile(): Promise<string> {
   cur.getRow(13).values = [undefined, '25\n하반기', '19기', '가짜하나', '가짜운용', '주식팀', '25.01~25.02']
   cur.getRow(14).values = [undefined, '25\n하반기', '18기', '가짜둘', '가짜투자', undefined, '24.下']
   cur.getRow(15).values = [undefined, '25\n하반기', '18기', '가짜셋', '가짜증권', undefined, '23.07~']
+  cur.getRow(16).values = [undefined, '25\n하반기', '19기', '가짜인턴', '가짜A증권', 'IB팀', '24.01~24.02']
+  cur.getRow(17).values = [undefined, '25\n하반기', '19기', '가짜인턴', '가짜B운용', undefined, '25.07~25.08']
 
   const off = wb.addWorksheet('GLIF 기수별 명단')
   off.getRow(3).values = [undefined, '기수', '직책', '성함', '번호', '기수별 인원']
@@ -112,7 +115,16 @@ describe('엑셀 읽기', () => {
   it('이력 시트의 인턴 직위는 인턴 경력이 된다', async () => {
     const result = buildImport(await readWorkbook(await makeFile()), MEMBERS)
     const careers = result.people.find((x: { member: Member }) => x.member.name === '가짜둘').careers
-    expect(careers.find((c: { company: string }) => c.company === '가짜운용')).toMatchObject({ kind: '인턴', isCurrent: false })
+    expect(careers.find((c: { company: string }) => c.company === '가짜운용')).toMatchObject({ kind: '인턴', isCurrent: false, title: '인턴' })
+  })
+
+  it('인턴은 직급이 "인턴"이고, 현직이 없으면 가장 최근 인턴을 현직으로 둔다', async () => {
+    const result = buildImport(await readWorkbook(await makeFile()), MEMBERS)
+    const careers = result.people.find((x: { member: Member }) => x.member.name === '가짜인턴').careers
+    expect(careers.map((c: { company: string; isCurrent: boolean; title: string }) => [c.company, c.isCurrent, c.title])).toEqual([
+      ['가짜A증권', false, '인턴'],
+      ['가짜B운용', true, '인턴'],
+    ])
   })
 
   it('기수가 없는 줄은 이름과 학번으로 맞추고, 명단에 없는 사람은 확인 필요로 남긴다', async () => {
@@ -186,5 +198,18 @@ describe('만든 SQL', () => {
     await db.exec(await sql())
     const r = await db.query(`select phone from public.members where name = '가짜회장'`)
     expect(r.rows).toEqual([{ phone: '010-9999-9999' }])
+  })
+
+  it('예전에 직급 없이 이전 경력으로 들어간 인턴 줄에 직급과 현직 여부를 맞춘다', async () => {
+    await db.exec(`insert into public.careers (member_id, kind, is_current, company, started_on)
+      select id, '인턴', false, '가짜B운용', '2025-07-01' from public.members where name = '가짜인턴'`)
+    await db.exec(await sql())
+    const r = await db.query(
+      `select c.company, c.title, c.is_current from public.careers c join public.members m on m.id = c.member_id where m.name = '가짜인턴' order by c.company`,
+    )
+    expect(r.rows).toEqual([
+      { company: '가짜A증권', title: '인턴', is_current: false },
+      { company: '가짜B운용', title: '인턴', is_current: true },
+    ])
   })
 })

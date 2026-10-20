@@ -269,6 +269,16 @@ export function buildImport(workbookData, members) {
     if (m && m.studentYear === null) person(m).studentYear ??= x.studentYear
   }
 
+  // 인턴은 직급 칸에 '인턴'. 현직이 없는 사람은 가장 최근 인턴을 목록에 보이도록 현직으로 둔다.
+  for (const p of people.values()) {
+    const interns = p.careers.filter((c) => c.kind === '인턴')
+    for (const c of interns) c.title ??= '인턴'
+    if (interns.length && !p.careers.some((c) => c.isCurrent)) {
+      const when = (c) => c.endedOn ?? c.startedOn ?? ''
+      interns.reduce((a, b) => (when(b) > when(a) ? b : a)).isCurrent = true
+    }
+  }
+
   return { people: [...people.values()], review, issues }
 }
 
@@ -311,6 +321,22 @@ where not exists (
   where c.member_id = m.id and c.kind = s.kind::public.career_kind and c.company = s.company
     and coalesce(c.team, '') = coalesce(s.team, '') and c.started_on is not distinct from s.started_on::date
 );
+`)
+  }
+  // 예전에 직급 없이 이전 경력으로만 들어간 인턴 줄에 직급 '인턴'과 현직 여부를 맞춘다
+  const interns = careers.filter(({ c }) => c.kind === '인턴')
+  if (interns.length) {
+    parts.push(`-- 인턴 직급·현직 표시 (${interns.length}건)
+with src(name, cohort, company, team, started_on, title, is_current) as (
+  values
+${interns.map(({ m, c }) => `  (${q(m.name)}, ${m.cohort}, ${q(c.company)}, ${v(c.team)}, ${v(c.startedOn)}, ${v(c.title)}, ${c.isCurrent})`).join(',\n')}
+)
+update public.careers c
+set title = coalesce(c.title, s.title), is_current = s.is_current::boolean
+from src s
+join public.members m on m.name = s.name and m.cohort = s.cohort::int
+where c.member_id = m.id and c.kind = '인턴' and c.company = s.company
+  and coalesce(c.team, '') = coalesce(s.team, '') and c.started_on is not distinct from s.started_on::date;
 `)
   }
   // 예전에 현직으로 들어간 이전 직장(회색 글씨)을 이전 직장으로 고친다

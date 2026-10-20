@@ -97,9 +97,28 @@ describe('buildSurvey', () => {
       MEMBERS,
       mine,
     )
-    expect(actions[0].career).toEqual({ kind: '정규', company: '가짜증권', team: 'S&T부문 ALB팀' })
+    expect(actions[0].career).toMatchObject({ kind: '정규', company: '가짜증권', team: 'S&T부문 ALB팀', title: null })
     expect(actions[1].keep).toBe(mine[1].careers[0])
-    expect(actions[1].career).toEqual({ kind: '학업', company: '가짜대학교법전원', team: '법학전문대학원' })
+    // 같은 회사면 기존 이름을 둔다
+    expect(actions[1].career).toMatchObject({ kind: '학업', company: '가짜대학교', team: '법학전문대학원' })
+  })
+
+  it('회장 보정: 구분, 같은 회사 지정, 이름 바꾸기, 시작일·지역, 기수 무시', () => {
+    const mine = [{ member: MEMBERS[1], careers: [{ kind: '정규', isCurrent: true, company: 'PwC', team: 'Industry Solution' }] }]
+    const { actions, review } = buildSurvey(
+      [
+        ['가짜둘', '18기', 'PwC컨설팅 (EUR)', '', { sameAs: 'PwC', rename: true, startedOn: '2024-05-01', region: '서울' }],
+        ['가짜셋', '18기', '가짜자산운용', '', { kind: '인턴' }],
+        ['가짜넷', '3기', '가짜은행', '', { anyCohort: true }],
+      ],
+      MEMBERS,
+      mine,
+    )
+    expect(review).toEqual([])
+    expect(actions[0].keep).toBe(mine[0].careers[0])
+    expect(actions[0].career).toEqual({ kind: '정규', company: 'PwC컨설팅', team: 'EUR', title: null, startedOn: '2024-05-01', region: '서울', merge: false })
+    expect(actions[1].career).toMatchObject({ kind: '인턴', company: '가짜자산운용', title: '인턴' })
+    expect(actions[2].member).toBe(MEMBERS[3])
   })
 })
 
@@ -122,8 +141,8 @@ describe('surveySql 를 실제 DB 에 실행', () => {
     await db.close()
   })
 
-  const rows = [
-    ['가짜하나', '1기', 'BofA증권 FICC 세일즈', 'one@gmail.com'],
+  const rows: unknown[][] = [
+    ['가짜하나', '1기', 'Bank of America Merrill Lynch (Global Market - FICC Sales)', 'one@gmail.com', { rename: true, startedOn: '2019-05-01', region: '서울' }],
     ['가짜둘', '18기', '새가짜증권 리서치센터', 'two@fakefirm.co.kr'],
     ['가짜셋', '18기', '없음', 'new@gmail.com'],
   ]
@@ -149,9 +168,11 @@ describe('surveySql 를 실제 DB 에 실행', () => {
   it('설문 회사만 현직으로 남기고 나머지는 이전 경력으로 내린다', async () => {
     await db.exec(sql())
     expect(await careersOf('가짜하나')).toEqual([
-      { company: 'Bank of America', team: 'FICC 세일즈', is_current: true },
+      { company: 'Bank of America Merrill Lynch', team: 'Global Market - FICC Sales', is_current: true },
       { company: '메릴린치 증권', team: 'FICC Sales', is_current: false },
     ])
+    const r = await db.query(`select started_on::text, region from public.careers where company = 'Bank of America Merrill Lynch'`)
+    expect(r.rows).toEqual([{ started_on: '2019-05-01', region: '서울' }])
     expect(await careersOf('가짜둘')).toEqual([
       { company: '새가짜증권', team: '리서치센터', is_current: true },
       { company: '옛날회사', team: null, is_current: false },
@@ -172,6 +193,31 @@ describe('surveySql 를 실제 DB 에 실행', () => {
     const first = [await careersOf('가짜하나'), await careersOf('가짜둘')]
     await db.exec(sql())
     expect([await careersOf('가짜하나'), await careersOf('가짜둘')]).toEqual(first)
+  })
+
+  it('merge 면 같은 회사의 다른 줄을 지우고 가장 이른 시작일로 한 줄만 남긴다', async () => {
+    await db.exec(`insert into public.careers (member_id, is_current, company, team, started_on)
+      select id, false, 'PwC', 'Operation', date '2023-03-01' from public.members where name = '가짜넷'
+      union all select id, true, 'PwC', 'Industry Solution', null::date from public.members where name = '가짜넷'`)
+    const mine = [
+      {
+        member: MEMBERS[3],
+        careers: [
+          { kind: '정규', isCurrent: false, company: 'PwC', team: 'Operation', startedOn: '2023-03-01' },
+          { kind: '정규', isCurrent: true, company: 'PwC', team: 'Industry Solution', startedOn: null },
+        ],
+      },
+    ]
+    const merged = surveySql(buildSurvey([['가짜넷', '7기', 'PwC컨설팅 (EUR)', '', { sameAs: 'PwC', rename: true, merge: true }]], MEMBERS, mine))
+    await db.exec(merged)
+    const after = await db.query(`select company, team, is_current, started_on::text from public.careers c join public.members m on m.id = c.member_id where m.name = '가짜넷'`)
+    expect(after.rows).toEqual([{ company: 'PwC컨설팅', team: 'EUR', is_current: true, started_on: '2023-03-01' }])
+    // 엑셀 단계가 두 줄을 다시 넣어도 한 줄로 돌아온다
+    await db.exec(`insert into public.careers (member_id, is_current, company, team, started_on)
+      select id, false, 'PwC', 'Operation', date '2023-03-01' from public.members where name = '가짜넷'
+      union all select id, true, 'PwC', 'Industry Solution', null::date from public.members where name = '가짜넷'`)
+    await db.exec(merged)
+    expect((await db.query(`select company, team, is_current, started_on::text from public.careers c join public.members m on m.id = c.member_id where m.name = '가짜넷'`)).rows).toEqual(after.rows)
   })
 
   it('엑셀 반영이 고친 줄의 옛 모양을 다시 넣어도 설문 반영 뒤에는 처음과 같다', async () => {

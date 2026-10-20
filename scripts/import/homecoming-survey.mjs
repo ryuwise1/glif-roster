@@ -2,7 +2,13 @@
 // 엑셀(25-2)보다 최근에 본인이 직접 적은 값이라 엑셀보다 우선한다.
 //
 // 입력: private/homecoming-2026-09.json   [[이름, 기수(적은 그대로), 현직(적은 그대로), 이메일], ...]
-//       설문 시트에서 '동의함' 응답만 옮긴다.
+//       설문 시트에서 '동의함' 응답만 옮긴다. 회장이 확인해 고친 값은 다섯째 칸에 적는다:
+//         { kind: '인턴' }         구분을 정해 준다
+//         { sameAs: 'PwC' }        이 이름의 기존 경력을 같은 회사로 본다
+//         { rename: true }         같은 회사여도 기존 이름 대신 설문에 적은 이름을 쓴다
+//         { startedOn: 'YYYY-MM-DD', region: '서울' }
+//         { anyCohort: true }      적은 기수가 명단과 달라도 이름으로 찾는다
+//         { merge: true }          같은 회사의 다른 줄은 지우고 한 줄로 합친다
 // excel-roster.mjs 가 이 파일이 있으면 roster-import.sql 끝에 붙인다. 엑셀 반영 뒤에 돌아야 하기 때문이다.
 //
 // 반영 규칙
@@ -58,6 +64,7 @@ const ALIASES = [
   [/삼일회계법인|삼일pwc/g, '삼일pwc'],
   [/securities(korea)?/g, '증권'],
   [/deutschland/g, 'germany'],
+  [/macquarieassetmanagement|맥쿼리자산운용/g, '맥쿼리자산운용'],
   [/법전원|법학전문대학원/g, ''],
 ]
 const canon = (s) => ALIASES.reduce((x, [re, to]) => x.replace(re, to), s.toLowerCase().replace(/[\s,.\-_()·&|/]/g, ''))
@@ -75,9 +82,9 @@ const cohortOf = (raw) => (/^\s*\d+\s*기?\s*$/.test(raw) ? Number(raw.match(/\d
 export function buildSurvey(rows, members, people) {
   const review = []
   const actions = []
-  for (const [rawName, cohortRaw, job, email] of rows) {
+  for (const [rawName, cohortRaw, job, email, opts = {}] of rows) {
     const name = rawName.trim()
-    const res = resolveMember(members, { name, cohort: cohortOf(cohortRaw), studentYear: null })
+    const res = resolveMember(members, { name, cohort: opts.anyCohort ? null : cohortOf(cohortRaw), studentYear: null })
     if (!res.member) {
       review.push(`설문 ${cohortRaw} ${name}: ${res.reason}`)
       continue
@@ -85,24 +92,37 @@ export function buildSurvey(rows, members, people) {
     const m = res.member
     const parsed = parseSurveyJob(job)
     if (parsed?.review) review.push(`설문 ${m.cohort}기 ${m.name}: ${parsed.review} ("${job}")`)
-    const career = parsed && !parsed.review ? parsed : null
+    const parsedCareer = parsed && !parsed.review ? parsed : null
 
     let keep = null
-    let team = career?.team ?? null
-    if (career) {
+    let career = null
+    if (parsedCareer) {
+      const kind = opts.kind ?? parsedCareer.kind
       // 구분(정규·인턴·학업)이 달라도 같은 회사면 그 줄을 쓰고, 구분은 설문 값으로 바꾼다
       const mine = people.find((p) => p.member.name === m.name && p.member.cohort === m.cohort)?.careers ?? []
-      const same = mine.filter((c) => sameCompany(c.company, career.company))
+      const same = mine.filter((c) => c.company === opts.sameAs || sameCompany(c.company, parsedCareer.company))
       keep = same.find((c) => c.isCurrent) ?? same[0] ?? null
       // 기존 부서가 설문 부서를 이미 담고 있으면 더 자세한 기존 값을 둔다 ('S&T부문 ALB팀' ⊃ 'ALB팀')
       const flat = (s) => s.toLowerCase().replace(/[\s()·,]/g, '')
+      let team = parsedCareer.team
       if (keep?.team && (!team || flat(keep.team).includes(flat(team)))) team = keep.team
+      career = {
+        kind,
+        // 같은 회사면 기존 이름을 둔다. rename 이면 설문(보정)에 적은 이름으로 바꾼다
+        company: keep && !opts.rename ? keep.company : parsedCareer.company,
+        team,
+        title: kind === '인턴' ? '인턴' : null,
+        // merge 면 같은 회사의 다른 줄은 지우고 하나로 합친다. 시작일은 가장 이른 날
+        startedOn: opts.startedOn ?? (opts.merge ? (same.map((c) => c.startedOn).filter(Boolean).sort()[0] ?? null) : null),
+        region: opts.region ?? null,
+        merge: Boolean(opts.merge),
+      }
     }
     const mail = EMAIL.test(email ?? '') ? email.trim() : null
     const personal = mail && PERSONAL.includes(mail.split('@')[1].toLowerCase())
     actions.push({
       member: m,
-      career: career && { ...career, team },
+      career,
       keep,
       personalEmail: personal ? mail : null,
       workEmail: mail && !personal ? mail : null,
@@ -132,13 +152,14 @@ where m.name = s.name and m.cohort = s.cohort::int;
 `)
   }
   if (jobs.length) {
-    // company: 현직으로 둘 경력의 회사 (이미 있는 같은 회사면 그 이름), keep_team: 그 줄을 찾을 부서
+    // company: 최종 회사 이름. keep_*: 엑셀에서 들어온, 같은 회사로 본 줄을 찾는 값
     const values = jobs
-      .map(({ member: m, career: c, keep }) =>
-        `  (${q(m.name)}, ${m.cohort}, ${q(c.kind)}, ${q(keep ? keep.company : c.company)}, ${v(c.team)}, ${keep ? 'true' : 'false'}, ${v(keep?.team)}, ${v(keep?.kind)})`,
+      .map(
+        ({ member: m, career: c, keep }) =>
+          `  (${q(m.name)}, ${m.cohort}, ${q(c.kind)}, ${q(c.company)}, ${v(c.team)}, ${v(c.title)}, ${v(c.startedOn)}, ${v(c.region)}, ${keep ? 'true' : 'false'}, ${v(keep?.company)}, ${v(keep?.team)}, ${v(keep?.kind)})`,
       )
       .join(',\n')
-    const src = `with src(name, cohort, kind, company, team, has_keep, keep_team, keep_kind) as (
+    const src = `with src(name, cohort, kind, company, team, title, started_on, region, has_keep, keep_company, keep_team, keep_kind) as (
   values
 ${values}
 )`
@@ -148,7 +169,7 @@ ${src}
 delete from public.careers c
 using src s, public.members m
 where m.name = s.name and m.cohort = s.cohort::int and s.has_keep::boolean
-  and c.member_id = m.id and c.company = s.company and c.kind = s.keep_kind::public.career_kind
+  and c.member_id = m.id and c.company = s.keep_company and c.kind = s.keep_kind::public.career_kind
   and coalesce(c.team, '') = coalesce(s.keep_team, '')
   and exists (
     select 1 from public.careers c2
@@ -162,26 +183,46 @@ update public.careers c
 set is_current = false
 from src s
 join public.members m on m.name = s.name and m.cohort = s.cohort::int
-where c.member_id = m.id and c.is_current and c.company <> s.company;
+where c.member_id = m.id and c.is_current and c.company <> s.company and c.company <> coalesce(s.keep_company, '');
 
 -- 2) 같은 회사 경력이 없으면 새로 넣기
 ${src}
-insert into public.careers (member_id, kind, is_current, company, team)
-select m.id, s.kind::public.career_kind, true, s.company, s.team
+insert into public.careers (member_id, kind, is_current, company, team, title, started_on, region)
+select m.id, s.kind::public.career_kind, true, s.company, s.team, s.title, s.started_on::date, s.region
 from src s
 join public.members m on m.name = s.name and m.cohort = s.cohort::int
 where not s.has_keep::boolean
   and not exists (select 1 from public.careers c where c.member_id = m.id and c.company = s.company);
 
--- 3) 이미 있던 같은 회사 경력은 현직으로 올리고 구분·부서를 설문 값으로
+-- 3) 이미 있던 같은 회사 경력은 현직으로 올리고 이름·구분·부서 등을 설문 값으로
 ${src}
 update public.careers c
-set is_current = true, kind = s.kind::public.career_kind, team = coalesce(s.team, c.team)
+set is_current = true,
+    company = s.company,
+    kind = s.kind::public.career_kind,
+    team = coalesce(s.team, c.team),
+    title = coalesce(s.title, c.title),
+    started_on = coalesce(s.started_on::date, c.started_on),
+    region = coalesce(s.region, c.region)
 from src s
 join public.members m on m.name = s.name and m.cohort = s.cohort::int
-where s.has_keep::boolean and c.member_id = m.id and c.company = s.company
-  and (c.is_current or coalesce(c.team, '') = coalesce(s.keep_team, ''));
+where s.has_keep::boolean and c.member_id = m.id and c.company = s.keep_company
+  and (c.is_current or (coalesce(c.team, '') = coalesce(s.keep_team, '') and c.kind = s.keep_kind::public.career_kind));
 `)
+    const merges = jobs.filter((a) => a.career.merge && a.keep)
+    if (merges.length) {
+      parts.push(`-- 4) 한 줄로 합치기로 한 회사의 나머지 줄 지우기 (${merges.length}명)
+with src(name, cohort, company, keep_company) as (
+  values
+${merges.map(({ member: m, career: c, keep }) => `  (${q(m.name)}, ${m.cohort}, ${q(c.company)}, ${q(keep.company)})`).join(',\n')}
+)
+delete from public.careers c
+using src s, public.members m
+where m.name = s.name and m.cohort = s.cohort::int and c.member_id = m.id
+  and c.company = s.keep_company and c.company <> s.company
+  and exists (select 1 from public.careers c2 where c2.member_id = m.id and c2.company = s.company and c2.is_current);
+`)
+    }
   }
   return parts.join('\n')
 }
