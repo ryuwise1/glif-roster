@@ -23,4 +23,22 @@ describe('DB 테스트 환경', () => {
     )
     expect(rows).toHaveLength(0)
   })
+
+  it('anon으로 전환하면 auth.uid()가 null이다', async () => {
+    const db = await createDb()
+    const uid = await asUser(db, null, async () =>
+      (await db.query<{ uid: string | null }>('select auth.uid() as uid')).rows[0].uid,
+    )
+    expect(uid).toBeNull()
+  })
+
+  it('asUser가 끝나면 역할과 auth.uid()가 원래대로 돌아온다', async () => {
+    const db = await createDb()
+    const id = '00000000-0000-0000-0000-0000000000aa'
+    await asUser(db, id, async () => undefined)
+    const uid = (await db.query<{ uid: string | null }>('select auth.uid() as uid')).rows[0].uid
+    const role = (await db.query<{ u: string }>('select current_user as u')).rows[0].u
+    expect(uid).toBeNull()
+    expect(role).not.toBe('authenticated')
+  })
 })

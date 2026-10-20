@@ -1,8 +1,9 @@
 import { PGlite } from '@electric-sql/pglite'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations')
+const MIGRATIONS_DIR = fileURLToPath(new URL('../../supabase/migrations', import.meta.url))
 
 // Supabase가 기본으로 제공하는 것 중 마이그레이션이 기대는 부분만 흉내 낸다.
 const SUPABASE_STUB = `
@@ -27,8 +28,9 @@ export async function createDb(): Promise<PGlite> {
   let files: string[] = []
   try {
     files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()
-  } catch {
-    // 마이그레이션 폴더가 아직 없으면 흉내만 적용된 DB를 돌려준다
+  } catch (err) {
+    // 마이그레이션 폴더가 아직 없을 때만 흉내만 적용된 DB를 돌려주고, 그 밖의 오류는 그대로 던진다
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
   }
   for (const file of files) {
     await db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'))
@@ -37,9 +39,9 @@ export async function createDb(): Promise<PGlite> {
 }
 
 export async function asUser<T>(db: PGlite, userId: string | null, fn: () => Promise<T>): Promise<T> {
-  await db.exec(`set role ${userId ? 'authenticated' : 'anon'}`)
-  await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [userId ?? ''])
   try {
+    await db.exec(`set role ${userId ? 'authenticated' : 'anon'}`)
+    await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [userId ?? ''])
     return await fn()
   } finally {
     await db.exec('reset role')
