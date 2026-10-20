@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 import { createDb } from './db/harness'
-// @ts-expect-error .mjs 스크립트라 타입 선언이 없다
 import { parseMembers, toSql } from '../scripts/import/glifskku-members.mjs'
 
 // 모두 가짜 데이터. 실제 사이트와 같은 모양의 HTML 이다.
@@ -56,7 +55,7 @@ describe('만든 SQL', () => {
 
   const sql = () => toSql(parseMembers(HTML).members)
   const all = async () =>
-    (await db.query(`select name, cohort, cohort_role, department, student_year from public.members order by cohort, name`)).rows
+    (await db.query<Record<string, unknown>>(`select name, cohort, cohort_role, department, student_year from public.members order by cohort, name`)).rows
 
   it('SQL 편집기(postgres)에서 실행되고 사람이 들어간다 (따옴표가 든 이름 포함)', async () => {
     await db.exec(sql())
