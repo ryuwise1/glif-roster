@@ -41,7 +41,7 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
   const done = params.done === 'bulk' ? bulkDone(params.n, params.skipped) : typeof params.done === 'string' ? DONE[params.done] : undefined
 
   const supabase = await createClient()
-  const { data } = await supabase
+  const { data, error: loadError } = await supabase
     .from('accounts')
     .select('user_id, email, login_name, member_id, claimed_name, claimed_cohort, requested_at, members(name, cohort)')
     .eq('status', '대기')
@@ -55,7 +55,10 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
       {error && <ErrorNote>{error}</ErrorNote>}
       {done && <p role="status" className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">{done}</p>}
 
-      {list.length === 0 ? (
+      {loadError ? (
+        // 조회가 실패했을 때 "대기 없음"으로 보이면 신청을 놓치므로 따로 알린다
+        <ErrorNote>신청 목록을 불러오지 못했습니다. 잠시 뒤 새로고침해 주세요.</ErrorNote>
+      ) : list.length === 0 ? (
         <p className="text-sm text-zinc-500">대기 중인 신청이 없습니다.</p>
       ) : (
         <>
