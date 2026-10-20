@@ -14,7 +14,7 @@ const ERRORS: Record<string, string> = {
 
 export default function SignupPage({ searchParams }: PageProps<'/signup'>) {
   return (
-    <Suspense fallback={<Shell title="가입 신청">{null}</Shell>}>
+    <Suspense fallback={<Shell eyebrow="Application" title="가입 신청">{null}</Shell>}>
       <Signup searchParams={searchParams} />
     </Suspense>
   )
@@ -36,9 +36,9 @@ async function Signup({ searchParams }: { searchParams: PageProps<'/signup'>['se
   const people = (candidates as { id: string; name: string }[] | null) ?? []
 
   return (
-    <Shell title="가입 신청">
-      <p className="mb-4 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        {access.email ?? '로그인한 계정'}으로 로그인했습니다. 기수를 고르고 본인 이름을 선택하면 관리자에게 승인 요청이 갑니다.
+    <Shell eyebrow="Application" title="가입 신청">
+      <p className="mb-5 text-sm leading-6 text-slate">
+        <span className="font-medium text-ink">{access.email ?? '로그인한 계정'}</span>으로 로그인했습니다. 기수를 고르고 본인 이름을 선택하면 회장에게 승인 요청이 갑니다.
       </p>
       {error && <ErrorNote>{error}</ErrorNote>}
 
@@ -59,28 +59,28 @@ async function Signup({ searchParams }: { searchParams: PageProps<'/signup'>['se
         <form action={submitSignup} className="space-y-3">
           <input type="hidden" name="cohort" value={cohort} />
           <fieldset className="space-y-2">
-            <legend className="mb-2 text-sm font-medium text-zinc-900 dark:text-zinc-50">{cohort}기에서 본인을 선택하세요</legend>
+            <legend className="mb-2 text-sm font-semibold text-ink">{cohort}기에서 본인을 선택하세요</legend>
             {people.map((p) => (
-              <label key={p.id} className="flex min-h-11 items-center gap-3 rounded-lg border border-zinc-200 px-3 dark:border-zinc-800">
-                <input type="radio" name="member" value={p.id} required />
+              <label key={p.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded border border-line bg-white px-3 transition-colors hover:border-navy has-[:checked]:border-navy has-[:checked]:bg-paper">
+                <input className="accent-[#172058]" type="radio" name="member" value={p.id} required />
                 <span className="text-sm">{p.name}</span>
               </label>
             ))}
-            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-zinc-200 px-3 dark:border-zinc-800">
-              <input type="radio" name="member" value="none" required />
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded border border-line bg-white px-3 transition-colors hover:border-navy has-[:checked]:border-navy has-[:checked]:bg-paper">
+              <input className="accent-[#172058]" type="radio" name="member" value="none" required />
               <span className="text-sm">목록에 없음</span>
             </label>
           </fieldset>
           <div>
-            <label htmlFor="name" className="mb-1 block text-xs text-zinc-500">목록에 없다면 이름을 직접 적어 주세요</label>
+            <label htmlFor="name" className="mb-1.5 block text-xs font-semibold text-slate">목록에 없다면 이름을 직접 적어 주세요</label>
             <input id="name" name="name" type="text" maxLength={30} className={inputClass} />
           </div>
           <button type="submit" className={`${buttonClass} w-full`}>가입 신청</button>
         </form>
       )}
 
-      <form action={signOut} className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <button type="submit" className="text-sm text-zinc-500 underline">다른 계정으로 로그인</button>
+      <form action={signOut} className="mt-6 border-t border-line pt-4">
+        <button type="submit" className="text-sm text-slate underline underline-offset-2 hover:text-navy">다른 계정으로 로그인</button>
       </form>
     </Shell>
   )

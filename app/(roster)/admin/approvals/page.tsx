@@ -1,8 +1,7 @@
 import { Suspense } from 'react'
-import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { ErrorNote, Shell, buttonClass, inputClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, Badge, DoneNote, ErrorNote, PageHeader, buttonClass, cardClass, inputClass, subtleButtonClass } from '@/components/shell'
 import { nameMatches } from '@/lib/approvals'
 import { approve, approveAsNew, approveMany, reject } from './actions'
 
@@ -28,14 +27,14 @@ type Pending = {
 
 export default function ApprovalsPage({ searchParams }: PageProps<'/admin/approvals'>) {
   return (
-    <Suspense fallback={<Shell title="가입 승인 대기" wide>{null}</Shell>}>
+    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
       <Approvals searchParams={searchParams} />
     </Suspense>
   )
 }
 
 async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/approvals'>['searchParams'] }) {
-  await requireAdmin()
+  const { email } = await requireAdmin()
   const params = await searchParams
   const error = typeof params.error === 'string' ? ERRORS[params.error] : undefined
   const done = params.done === 'bulk' ? bulkDone(params.n, params.skipped) : typeof params.done === 'string' ? DONE[params.done] : undefined
@@ -51,31 +50,32 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
   const linkedCount = list.filter((a) => a.member_id !== null).length
 
   return (
-    <Shell title="가입 승인 대기" wide>
+    <AppFrame email={email} isAdmin active="approvals">
+      <PageHeader eyebrow="Admin" title="가입 승인" desc={loadError ? undefined : `대기 중인 신청 ${list.length}건`} />
       {error && <ErrorNote>{error}</ErrorNote>}
-      {done && <p role="status" className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">{done}</p>}
+      {done && <DoneNote>{done}</DoneNote>}
 
       {loadError ? (
         // 조회가 실패했을 때 "대기 없음"으로 보이면 신청을 놓치므로 따로 알린다
         <ErrorNote>신청 목록을 불러오지 못했습니다. 잠시 뒤 새로고침해 주세요.</ErrorNote>
       ) : list.length === 0 ? (
-        <p className="text-sm text-zinc-500">대기 중인 신청이 없습니다.</p>
+        <p className={`${cardClass} text-center text-sm text-muted`}>대기 중인 신청이 없습니다.</p>
       ) : (
         <>
           {linkedCount > 0 && (
-            <form id="bulk" action={approveMany} className="mb-4 flex flex-col gap-2 rounded-xl bg-zinc-50 p-4 text-sm sm:flex-row sm:items-center sm:justify-between dark:bg-zinc-900">
-              <p className="text-zinc-600 dark:text-zinc-400">로그인 이름과 연명부 이름이 같은 신청은 미리 체크해 두었습니다. 이름은 본인이 바꿀 수 있으니 확인한 뒤 승인하세요.</p>
+            <form id="bulk" action={approveMany} className="mb-4 flex flex-col gap-3 rounded-lg border border-navy/20 bg-white p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-slate">로그인 이름과 연명부 이름이 같은 신청은 미리 체크해 두었습니다. 프로필 이름은 본인이 바꿀 수 있으니 확인한 뒤 승인하세요.</p>
               <button type="submit" className={`${buttonClass} shrink-0`}>체크한 신청 승인</button>
             </form>
           )}
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {list.map((a) => {
               const linked = a.member_id !== null
               const name = a.members?.name ?? a.claimed_name
               const cohort = a.members?.cohort ?? a.claimed_cohort
               const matched = linked && nameMatches(a.login_name, a.members?.name ?? null)
               return (
-                <li key={a.user_id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                <li key={a.user_id} className={cardClass}>
                   <div className="flex items-start gap-3">
                     {linked && (
                       <input
@@ -85,27 +85,30 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
                         value={a.user_id}
                         defaultChecked={matched}
                         aria-label={`${name} 신청 체크`}
-                        className="mt-1.5 size-4 shrink-0"
+                        className="mt-1 size-4 shrink-0 accent-[#172058]"
                       />
                     )}
-                    <div>
-                      <p className="text-base font-medium">
-                        {name} <span className="text-sm font-normal text-zinc-500">{cohort}기</span>
-                        {matched && <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-xs font-normal text-green-800 dark:bg-green-950 dark:text-green-200">이름 일치</span>}
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-1.5 text-base font-bold text-ink">
+                        {name} <span className="text-sm font-normal text-slate">{cohort}기</span>
+                        {matched && <Badge tone="ok">이름 일치</Badge>}
+                        {!linked && <Badge tone="outline">목록에 없음</Badge>}
                       </p>
-                      <p className="mt-1 break-all text-sm text-zinc-600 dark:text-zinc-400">
-                        로그인 이름: {a.login_name ?? '(없음)'} · 계정: {a.email ?? '(이메일 없음)'}
-                      </p>
+                      <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-y-1 text-sm">
+                        <dt className="text-slate">로그인 이름</dt>
+                        <dd className="text-ink">{a.login_name ?? <span className="text-muted">(없음)</span>}</dd>
+                        <dt className="text-slate">계정</dt>
+                        <dd className="break-all text-ink">{a.email ?? <span className="text-muted">(이메일 없음)</span>}</dd>
+                        <dt className="text-slate">신청일</dt>
+                        <dd className="text-ink">{new Date(a.requested_at).toLocaleDateString('ko-KR')}</dd>
+                      </dl>
+                      {!linked && <p className="mt-2 text-xs text-muted">승인하면 이 이름과 기수로 새 학회원이 추가됩니다.</p>}
                     </div>
                   </div>
-                  <p className="mb-3 text-xs text-zinc-500">
-                    {linked ? '연명부에 있는 사람을 선택해 신청' : '“목록에 없음”으로 신청 — 승인하면 새 학회원으로 추가됩니다'}
-                    {' · '}{new Date(a.requested_at).toLocaleDateString('ko-KR')}
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-start">
                     <form action={linked ? approve : approveAsNew}>
                       <input type="hidden" name="user_id" value={a.user_id} />
-                      <button type="submit" className={buttonClass}>{linked ? '승인' : '새 학회원으로 추가하고 승인'}</button>
+                      <button type="submit" className={`${buttonClass} w-full sm:w-auto`}>{linked ? '승인' : '새 학회원으로 추가하고 승인'}</button>
                     </form>
                     <form action={reject} className="flex flex-1 gap-2">
                       <input type="hidden" name="user_id" value={a.user_id} />
@@ -120,8 +123,7 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
           </ul>
         </>
       )}
-      <Link href="/members" className="mt-6 inline-block text-sm text-zinc-500 underline">연명부로 돌아가기</Link>
-    </Shell>
+    </AppFrame>
   )
 }
 

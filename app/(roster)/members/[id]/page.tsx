@@ -5,20 +5,21 @@ import { requireApproved } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
 import { describeCareer, yearMonth, type Career, type DirectoryMember } from '@/lib/roster'
-import { subtleButtonClass } from '@/components/shell'
+import { AppFrame, Badge, Banner, RoleBadge, SectionTitle, cardClass } from '@/components/shell'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default function MemberPage({ params }: PageProps<'/members/[id]'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-zinc-500">불러오는 중…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
       <Member params={params} />
     </Suspense>
   )
 }
 
 async function Member({ params }: { params: PageProps<'/members/[id]'>['params'] }) {
-  await requireApproved()
+  const { account, email } = await requireApproved()
+  const isAdmin = account.role !== '학회원'
   const { id } = await params
   if (!UUID.test(id)) notFound()
 
@@ -43,58 +44,77 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
     .filter(Boolean)
     .join(' ')
 
-  return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
-      <Link href="/members" className={`${subtleButtonClass} mb-4`}>← 목록</Link>
-
-      <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {member.name}
-          {member.cohort_role && (
-            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-normal text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-              {member.cohort}기 {member.cohort_role}
-            </span>
-          )}
-        </h1>
-        <dl className="mt-4 grid grid-cols-[5.5rem_1fr] gap-y-2 text-sm">
-          <dt className="text-zinc-500">기수</dt><dd>{member.cohort}기</dd>
-          <dt className="text-zinc-500">학과·학번</dt><dd>{school || '—'}</dd>
-          <dt className="text-zinc-500">휴대폰</dt>
-          <dd>{member.phone ? <a href={`tel:${member.phone}`} className="underline">{member.phone}</a> : '—'}</dd>
-          <dt className="text-zinc-500">개인 이메일</dt>
-          <dd className="break-all">{member.personal_email ? <a href={`mailto:${member.personal_email}`} className="underline">{member.personal_email}</a> : '—'}</dd>
-          <dt className="text-zinc-500">직장 이메일</dt>
-          <dd className="break-all">{member.work_email ? <a href={`mailto:${member.work_email}`} className="underline">{member.work_email}</a> : '—'}</dd>
-        </dl>
-        <p className="mt-3 text-xs text-zinc-400">“—”는 등록되지 않았거나 본인이 숨긴 항목입니다.</p>
-      </section>
-
-      <section className="mt-4">
-        <h2 className="mb-2 text-base font-semibold">경력</h2>
-        {careers.length === 0 ? (
-          <p className="rounded-xl bg-white p-4 text-sm text-zinc-500 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">등록된 경력이 없습니다.</p>
-        ) : (
-          <ul className="space-y-2">
-            {careers.map((c) => (
-              <li key={c.id} className="rounded-xl bg-white p-4 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                <p className="font-medium">
-                  {describeCareer(c)}
-                  {c.is_current && <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 align-middle text-xs font-normal text-green-900 dark:bg-green-900/40 dark:text-green-200">현직</span>}
-                  {c.kind !== '정규' && <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 align-middle text-xs font-normal text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{c.kind}</span>}
-                </p>
-                <p className="mt-1 text-sm text-zinc-500">
-                  {[[c.industry, c.job_function].filter(Boolean).join(' · '), c.region].filter(Boolean).join(' / ') || null}
-                </p>
-                {(c.started_on || c.ended_on) && (
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {yearMonth(c.started_on) ?? '?'} ~ {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
+  const banner = (
+    <Banner eyebrow={`GLIF ${String(member.cohort).padStart(2, '0')}`} title={member.name} desc={[`${member.cohort}기`, member.cohort_role, school].filter(Boolean).join(' · ')}>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Link href="/members" className="inline-flex min-h-10 items-center rounded border border-white/40 px-4 text-sm font-medium text-white transition-colors hover:bg-white hover:text-navy">
+          ← 목록으로
+        </Link>
+        {isAdmin && (
+          <Link href={`/admin/members/${member.id}`} className="inline-flex min-h-10 items-center rounded bg-white px-4 text-sm font-semibold text-navy transition-colors hover:bg-white/90">
+            정보 편집
+          </Link>
         )}
-      </section>
-    </main>
+      </div>
+    </Banner>
+  )
+
+  const contacts = [
+    { label: '휴대폰', value: member.phone, href: member.phone ? `tel:${member.phone}` : null },
+    { label: '개인 이메일', value: member.personal_email, href: member.personal_email ? `mailto:${member.personal_email}` : null },
+    { label: '직장 이메일', value: member.work_email, href: member.work_email ? `mailto:${member.work_email}` : null },
+  ]
+
+  return (
+    <AppFrame email={email} isAdmin={isAdmin} active="members" banner={banner}>
+      <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
+        <section className={`${cardClass} self-start`}>
+          <SectionTitle eyebrow="Profile" title="기본 정보" />
+          <dl className="grid grid-cols-[5.5rem_1fr] gap-y-3 text-sm">
+            <dt className="text-slate">기수</dt>
+            <dd className="flex items-center gap-1.5 font-medium">{member.cohort}기 <RoleBadge role={member.cohort_role} /></dd>
+            <dt className="text-slate">학과·학번</dt>
+            <dd className="font-medium">{school || <span className="text-muted">—</span>}</dd>
+            {contacts.map((c) => (
+              <div key={c.label} className="contents">
+                <dt className="text-slate">{c.label}</dt>
+                <dd className="break-all font-medium">
+                  {c.href ? <a href={c.href} className="text-navy underline-offset-2 hover:underline">{c.value}</a> : <span className="text-muted">—</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4 border-t border-line pt-3 text-xs text-muted">“—”는 등록되지 않았거나 본인이 숨긴 항목입니다.</p>
+        </section>
+
+        <section className={cardClass}>
+          <SectionTitle eyebrow="Career" title="경력" />
+          {careers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">등록된 경력이 없습니다.</p>
+          ) : (
+            <ol className="relative space-y-5 border-l border-line pl-5">
+              {careers.map((c) => (
+                <li key={c.id} className="relative">
+                  <span aria-hidden className={`absolute -left-[25px] top-1.5 size-2.5 rounded-full border-2 ${c.is_current ? 'border-navy bg-navy' : 'border-line bg-white'}`} />
+                  <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
+                    {describeCareer(c)}
+                    {c.is_current && <Badge tone="navy">현직</Badge>}
+                    {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
+                  </p>
+                  {(c.industry || c.job_function || c.region) && (
+                    <p className="mt-0.5 text-sm text-slate">{[[c.industry, c.job_function].filter(Boolean).join(' · '), c.region].filter(Boolean).join(' / ')}</p>
+                  )}
+                  {(c.started_on || c.ended_on) && (
+                    <p className="mt-0.5 font-display text-xs font-medium text-muted">
+                      {yearMonth(c.started_on) ?? '?'} – {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
+    </AppFrame>
   )
 }
