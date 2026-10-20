@@ -248,4 +248,15 @@ describe('표 비우기 권한', () => {
       }
     }
   })
+
+  it('로그인한 사람은 어떤 시퀀스도 바꾸거나 읽을 수 없다', async () => {
+    const { rows } = await db.query<{ name: string; ok: boolean }>(
+      `select c.relname as name,
+              has_sequence_privilege('authenticated', c.oid, 'UPDATE') or has_sequence_privilege('authenticated', c.oid, 'SELECT') as ok
+       from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where c.relkind = 'S' and n.nspname = 'public'`,
+    )
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((r) => r.ok)).toEqual([])
+  })
 })

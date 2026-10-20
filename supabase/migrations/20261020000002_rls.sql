@@ -6,6 +6,8 @@ alter default privileges in schema public revoke all on sequences from anon;
 alter default privileges in schema public revoke all on functions from anon;
 -- 로그인한 사람에게도 표 비우기(TRUNCATE)·참조·트리거 권한은 주지 않는다. TRUNCATE 는 RLS 와 행 트리거를 건너뛴다.
 alter default privileges in schema public revoke truncate, references, trigger on tables from authenticated;
+-- 시퀀스(setval 등)도 로그인한 사람이 건드리지 못하게 한다. 지금은 audit_log 만 시퀀스를 쓰고 그것도 트리거(소유자 권한)가 쓴다.
+alter default privileges in schema public revoke all on sequences from authenticated;
 
 -- 권한 확인 함수 (RLS 정책 안에서 accounts를 다시 읽으므로 security definer)
 create function public.is_approved() returns boolean
@@ -38,6 +40,7 @@ $$;
 revoke all on all tables in schema public from anon;
 revoke all on all sequences in schema public from anon;
 revoke truncate, references, trigger on all tables in schema public from authenticated;
+revoke all on all sequences in schema public from authenticated;
 
 -- RLS 켜기
 alter table public.settings enable row level security;

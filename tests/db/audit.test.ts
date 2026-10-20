@@ -91,4 +91,15 @@ describe('수정 기록', () => {
   it('수정 기록 함수는 직접 부를 수 없다', async () => {
     await expect(asUser(db, U.admin, () => db.exec('select public.write_audit()'))).rejects.toThrow(/permission denied/)
   })
+
+  it('로그인한 사람은 수정 기록 번호표를 건드릴 수 없고 기록은 계속 쓰인다', async () => {
+    await expect(
+      asUser(db, U.admin, () => db.exec(`select setval('public.audit_log_id_seq', 9000000000000000000)`)),
+    ).rejects.toThrow(/permission denied/)
+    await expect(asUser(db, U.admin, () => db.exec(`select nextval('public.audit_log_id_seq')`))).rejects.toThrow(/permission denied/)
+    await asUser(db, U.admin, () => db.exec(`update public.members set department = 'x' where id = '${M.member}'`))
+    const r = await rows(U.super, `select id::int as id from public.audit_log where table_name = 'members' and action = 'UPDATE'`)
+    expect(r).toHaveLength(1)
+    expect(r[0].id).toBeLessThan(1000)
+  })
 })
