@@ -34,6 +34,10 @@ GLIF 학회원 전용 연명부 웹사이트. 나중에 명함 도감과 한 서
 - 권한 규칙을 바꾸면 `tests/db/rls.test.ts`에 테스트를 추가한다.
 - 권한 확인 함수: `is_approved()`, `is_admin()`, `is_superadmin()`, `current_member_id()`
 - 학회원 열람은 `member_directory` 뷰로 한다 (숨긴 연락처가 가려짐). `members` 표를 직접 읽지 않는다.
+- `accounts`를 security definer 함수(RPC) 안에서 바꾸면 `guard_accounts` 검사를 건너뛴다. 그런 함수는 같은 검사(관리자·최고관리자 보호, 결정 기록)를 직접 해야 한다.
+- 새 표는 uuid 키를 쓴다. identity/serial 키를 쓰면 `authenticated`에 시퀀스 USAGE를 명시적으로 준다 (기본으로는 시퀀스 권한을 회수해 둠).
+- 새 함수는 만든 직후 `revoke execute on function … from public, anon;`을 하고 필요한 사람에게만 `grant execute`한다. 빠뜨리면 '함수 실행 권한' 테스트가 실패한다.
+- Supabase Security Advisor가 `member_directory`(security definer view)와 public의 security definer 함수를 경고하는 것은 의도된 설계다 (숨긴 연락처를 가리는 열람 경로).
 
 ## 명령
 - 테스트: `npm test`
