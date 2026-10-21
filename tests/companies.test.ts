@@ -34,6 +34,10 @@ describe('로고 주소', () => {
       'https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true&fallback=404',
     )
   })
+  it('로고 그림을 직접 둔 회사는 키와 상관없이 그 그림을 쓴다', () => {
+    expect(logoSrc('samsungpop.com', '')).toBe('/logos/samsungpop.com.png')
+    expect(logoSrc('samsungpop.com', 'pk_test')).toBe('/logos/samsungpop.com.png')
+  })
   it('서버는 구글 아이콘을 맨 도메인, www. 순으로 본다', () => {
     expect(googleIconUrls('fakebank.example')).toEqual([
       'https://www.google.com/s2/favicons?domain=fakebank.example&sz=128',

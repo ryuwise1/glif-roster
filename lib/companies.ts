@@ -22,10 +22,14 @@ export function parseDomain(input: string): string | null {
 // 서버의 로고 찾는 방법을 바꾸면 올린다. 브라우저에 남은 예전 결과(못 찾음 포함)를 버리게 한다
 const LOGO_VERSION = 2
 
-// logo.dev 공개 키(NEXT_PUBLIC_LOGO_DEV_TOKEN)가 있으면 그 로고를, 없으면 우리 서버의 /api/logo 를 쓴다.
-// logo.dev 는 못 찾으면 404 를 주게 해서(fallback=404) 첫 글자로 넘어가게 한다
+// 사이트 아이콘이 회사 로고와 다른 곳(앱 아이콘 등)은 로고 그림을 직접 둔다: public/logos/<도메인>.png
+const LOGO_FILES = new Set(['samsungpop.com'])
+
+// 직접 둔 로고가 있으면 그것을, 없으면 logo.dev 공개 키(NEXT_PUBLIC_LOGO_DEV_TOKEN)가 있으면 그 로고를,
+// 둘 다 없으면 우리 서버의 /api/logo 를 쓴다. logo.dev 는 못 찾으면 404 를 주게 해서(fallback=404) 첫 글자로 넘어가게 한다
 export function logoSrc(domain: string, token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN): string {
   const d = encodeURIComponent(domain)
+  if (LOGO_FILES.has(domain)) return `/logos/${d}.png`
   return token
     ? `https://img.logo.dev/${d}?token=${encodeURIComponent(token)}&size=128&format=png&retina=true&fallback=404`
     : `/api/logo/${d}?v=${LOGO_VERSION}`
