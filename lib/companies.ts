@@ -19,13 +19,16 @@ export function parseDomain(input: string): string | null {
   return DOMAIN.test(host) ? host : null
 }
 
+// 서버의 로고 찾는 방법을 바꾸면 올린다. 브라우저에 남은 예전 결과(못 찾음 포함)를 버리게 한다
+const LOGO_VERSION = 2
+
 // logo.dev 공개 키(NEXT_PUBLIC_LOGO_DEV_TOKEN)가 있으면 그 로고를, 없으면 우리 서버의 /api/logo 를 쓴다.
 // logo.dev 는 못 찾으면 404 를 주게 해서(fallback=404) 첫 글자로 넘어가게 한다
 export function logoSrc(domain: string, token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN): string {
   const d = encodeURIComponent(domain)
   return token
     ? `https://img.logo.dev/${d}?token=${encodeURIComponent(token)}&size=128&format=png&retina=true&fallback=404`
-    : `/api/logo/${d}`
+    : `/api/logo/${d}?v=${LOGO_VERSION}`
 }
 
 // 구글 아이콘 서비스 주소. 한국 회사 상당수는 www. 를 붙여야 찾으므로 두 주소를 차례로 본다
@@ -51,12 +54,28 @@ export function icoWidth(b: Uint8Array): number | null {
   return max
 }
 
-// 아이콘 그림의 종류와 가로 크기. PNG·ICO 가 아니면 null (SVG·HTML 오류 화면 등은 쓰지 않는다)
-export function iconInfo(b: Uint8Array): { type: 'image/png' | 'image/x-icon'; width: number } | null {
+// JPEG 그림의 가로 크기(SOF 표지에서 읽는다). JPEG 가 아니거나 표지를 못 찾으면 null
+export function jpegWidth(b: Uint8Array): number | null {
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null
+  let i = 2
+  while (i + 9 < b.length && b[i] === 0xff) {
+    const m = b[i + 1]
+    if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return (b[i + 7] << 8) | b[i + 8] || null
+    i += 2 + ((b[i + 2] << 8) | b[i + 3])
+  }
+  return null
+}
+
+export type IconType = 'image/png' | 'image/x-icon' | 'image/jpeg'
+
+// 아이콘 그림의 종류와 가로 크기. PNG·ICO·JPEG 가 아니면 null (SVG·HTML 오류 화면 등은 쓰지 않는다)
+export function iconInfo(b: Uint8Array): { type: IconType; width: number } | null {
   const png = pngWidth(b)
   if (png) return { type: 'image/png', width: png }
   const ico = icoWidth(b)
-  return ico ? { type: 'image/x-icon', width: ico } : null
+  if (ico) return { type: 'image/x-icon', width: ico }
+  const jpeg = jpegWidth(b)
+  return jpeg ? { type: 'image/jpeg', width: jpeg } : null
 }
 
 // 홈페이지 HTML 에서 아이콘 주소를 모은다(<link rel="icon">, <link rel="apple-touch-icon"> 등).

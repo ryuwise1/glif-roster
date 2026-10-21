@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: RouteContext<'/api/logo/[do
   // 홈페이지에 직접 요청하는 것은 관리자가 등록한 도메인일 때만 한다(아무 주소나 대신 요청하지 않도록)
   if ((!best || best.width < 64) && (await isRegistered(domain))) best = larger(best, await siteIcon(domain))
 
-  if (!best) return new Response(null, { status: 404, headers: { 'cache-control': 'private, max-age=86400' } })
+  if (!best) return new Response(null, { status: 404, headers: { 'cache-control': 'private, max-age=3600' } })
   return new Response(best.body, {
     headers: { 'content-type': best.type, 'cache-control': 'private, max-age=604800', 'x-content-type-options': 'nosniff' },
   })

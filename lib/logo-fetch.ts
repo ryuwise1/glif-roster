@@ -1,7 +1,7 @@
-import { googleIconUrls, iconInfo, iconLinks } from './companies'
+import { type IconType, googleIconUrls, iconInfo, iconLinks } from './companies'
 
 // 회사 로고 그림을 밖에서 받아 오는 부분. /api/logo 가 쓴다.
-export type Icon = { body: ArrayBuffer; type: 'image/png' | 'image/x-icon'; width: number }
+export type Icon = { body: ArrayBuffer; type: IconType; width: number }
 
 const MAX_BYTES = 512 * 1024 // 아이콘 한 장의 상한. 이보다 큰 응답은 아이콘이 아니라고 본다
 const MAX_ICONS = 8 // 홈페이지 하나에서 받아 볼 아이콘 주소 수
@@ -36,14 +36,21 @@ export async function googleIcon(domain: string): Promise<Icon | null> {
   return best
 }
 
-// 회사 홈페이지에 있는 아이콘 중 가장 큰 것. 구글이 못 찾는 국내 회사가 많아서 둔다
+// 회사 홈페이지에 있는 아이콘 중 가장 큰 것. 구글이 못 찾는 국내 회사가 많아서 둔다.
+// 홈페이지가 느리거나(첫 화면으로 넘기는 곳이 많다) 막혀도 되게, 기본 위치의 아이콘은 처음부터 같이 받는다
 export async function siteIcon(domain: string): Promise<Icon | null> {
+  const fixed = [`https://www.${domain}/favicon.ico`, `https://www.${domain}/apple-touch-icon.png`, `https://${domain}/favicon.ico`]
+  const [fromFixed, fromPage] = await Promise.all([Promise.all(fixed.map(icon)), pageIcons(domain, new Set(fixed))])
+  return [...fromFixed, ...fromPage].reduce(larger, null)
+}
+
+async function pageIcons(domain: string, skip: Set<string>): Promise<(Icon | null)[]> {
   for (const page of [`https://www.${domain}/`, `https://${domain}/`, `http://www.${domain}/`]) {
     const r = await get(page)
     if (!r) continue
     const html = (await r.text()).slice(0, 300_000)
-    const icons = await Promise.all(iconLinks(html, r.url).slice(0, MAX_ICONS).map(icon))
-    return icons.reduce(larger, null)
+    const urls = iconLinks(html, r.url).filter((u) => !skip.has(u))
+    return Promise.all(urls.slice(0, MAX_ICONS).map(icon))
   }
-  return null
+  return []
 }

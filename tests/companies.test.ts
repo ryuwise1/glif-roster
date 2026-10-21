@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { domainMap, googleIconUrls, icoWidth, iconInfo, iconLinks, logoSrc, normCompany, parseDomain, pngWidth } from '../lib/companies'
+import { domainMap, googleIconUrls, icoWidth, iconInfo, iconLinks, jpegWidth, logoSrc, normCompany, parseDomain, pngWidth } from '../lib/companies'
 
 // 모두 가짜 데이터
 describe('회사 이름 맞추기', () => {
@@ -29,7 +29,7 @@ describe('도메인 입력', () => {
 
 describe('로고 주소', () => {
   it('키가 없으면 우리 서버의 /api/logo, 있으면 logo.dev 를 쓴다', () => {
-    expect(logoSrc('fakebank.example', '')).toBe('/api/logo/fakebank.example')
+    expect(logoSrc('fakebank.example', '')).toBe('/api/logo/fakebank.example?v=2')
     expect(logoSrc('fakebank.example', 'pk_test')).toBe(
       'https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true&fallback=404',
     )
@@ -75,12 +75,20 @@ describe('ICO 크기와 아이콘 종류', () => {
     expect(icoWidth(new TextEncoder().encode('<html>not an icon at all</html>'))).toBeNull()
     expect(icoWidth(ico(16).slice(0, 10))).toBeNull()
   })
-  it('PNG·ICO 를 구분하고, 둘 다 아니면 null', () => {
+  // 가짜 JPEG: SOI, APP0(길이 4), SOF2(가로 512) 순서
+  const jpeg = (sof = 0xc2) => new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, sof, 0, 17, 8, 1, 0, 2, 0, 3, 1, 0x22, 0])
+  it('JPEG 는 앞 구간을 건너뛰고 SOF 표지에서 가로 크기를 읽는다', () => {
+    expect(jpegWidth(jpeg())).toBe(512)
+    expect(jpegWidth(jpeg(0xc4))).toBeNull() // 허프만 표(DHT)는 크기 표지가 아니다
+    expect(jpegWidth(ico(32))).toBeNull()
+  })
+  it('PNG·ICO·JPEG 를 구분하고, 셋 다 아니면 null', () => {
     const png = new Uint8Array(24)
     png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     new DataView(png.buffer).setUint32(16, 180)
     expect(iconInfo(png)).toEqual({ type: 'image/png', width: 180 })
     expect(iconInfo(ico(32))).toEqual({ type: 'image/x-icon', width: 32 })
+    expect(iconInfo(jpeg())).toEqual({ type: 'image/jpeg', width: 512 })
     expect(iconInfo(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBeNull()
   })
 })
