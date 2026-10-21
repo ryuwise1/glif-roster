@@ -63,7 +63,11 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
     <AppFrame email={email} isAdmin={isAdmin} active="members">
       <div className="mb-6 flex items-center justify-between gap-2 text-sm">
         <Link href="/members" className="text-slate hover:text-ink">← 연명부</Link>
-        {isAdmin && <Link href={`/admin/members/${member.id}`} className={subtleButtonClass}>정보 수정</Link>}
+        {isAdmin ? (
+          <Link href={`/admin/members/${member.id}`} className={subtleButtonClass}>정보 수정</Link>
+        ) : (
+          member.id === account.member_id && <Link href="/me" className={subtleButtonClass}>내 정보 수정</Link>
+        )}
       </div>
 
       {/* 프로필 머리 */}

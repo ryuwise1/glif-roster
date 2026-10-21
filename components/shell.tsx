@@ -91,13 +91,14 @@ export function AppFrame({
 }: {
   email: string | null
   isAdmin: boolean
-  active?: 'members' | 'approvals'
+  active?: 'members' | 'approvals' | 'me'
   hero?: ReactNode
   children: ReactNode
 }) {
   const nav = [
     { key: 'members', href: '/members', label: '연명부', show: true },
     { key: 'approvals', href: '/admin/approvals', label: '가입 승인', show: isAdmin },
+    { key: 'me', href: '/me', label: '내 정보', show: true },
   ] as const
   return (
     <>

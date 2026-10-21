@@ -38,30 +38,49 @@ function Field({ label, htmlFor, hint, children, className = '' }: { label: stri
   )
 }
 
-export function MemberForm({ action, member, maxCohort, submitLabel }: { action: Action; member?: EditableMember; maxCohort: number; submitLabel: string }) {
+// locked: 내 정보 수정. 이름·기수·기수 역할은 보여 주기만 하고 보내지 않는다(관리자만 고친다).
+export function MemberForm({ action, member, maxCohort, submitLabel, locked = false }: { action: Action; member?: EditableMember; maxCohort: number; submitLabel: string; locked?: boolean }) {
   const [state, formAction, pending] = useActionState(action, {})
   const hidden = (f: HiddenField) => (state.values ? (state.values.hidden_fields ?? []).includes(f) : (member?.hidden_fields ?? []).includes(f))
 
   return (
     <form action={formAction} className="space-y-5">
-      {member && <input type="hidden" name="id" value={member.id} />}
+      {member && !locked && <input type="hidden" name="id" value={member.id} />}
       {state.error && <ErrorNote>{state.error}</ErrorNote>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="이름 *" htmlFor="name">
-          <input id="name" name="name" required maxLength={40} defaultValue={pick(state, 'name', member?.name)} className={inputClass} />
-        </Field>
-        <Field label="기수 *" htmlFor="cohort">
-          <input id="cohort" name="cohort" type="number" required min={1} max={maxCohort} defaultValue={pick(state, 'cohort', member?.cohort)} className={inputClass} />
-        </Field>
-        <Field label="기수 역할" htmlFor="cohort_role">
-          <select id="cohort_role" name="cohort_role" defaultValue={pick(state, 'cohort_role', member?.cohort_role)} className={inputClass}>
-            <option value="">없음</option>
-            <option value="회장">회장</option>
-            <option value="부회장">부회장</option>
-          </select>
-        </Field>
-      </div>
+      {locked && member ? (
+        <div>
+          <dl className="grid gap-4 sm:grid-cols-3">
+            {[
+              ['이름', member.name],
+              ['기수', `${member.cohort}기`],
+              ['기수 역할', member.cohort_role ?? '없음'],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className={labelClass}>{label}</dt>
+                <dd className="flex min-h-11 items-center rounded border border-line bg-paper px-3 text-sm text-slate">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-1 text-xs text-muted">이름·기수·기수 역할은 회장에게 말해 주세요.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="이름 *" htmlFor="name">
+            <input id="name" name="name" required maxLength={40} defaultValue={pick(state, 'name', member?.name)} className={inputClass} />
+          </Field>
+          <Field label="기수 *" htmlFor="cohort">
+            <input id="cohort" name="cohort" type="number" required min={1} max={maxCohort} defaultValue={pick(state, 'cohort', member?.cohort)} className={inputClass} />
+          </Field>
+          <Field label="기수 역할" htmlFor="cohort_role">
+            <select id="cohort_role" name="cohort_role" defaultValue={pick(state, 'cohort_role', member?.cohort_role)} className={inputClass}>
+              <option value="">없음</option>
+              <option value="회장">회장</option>
+              <option value="부회장">부회장</option>
+            </select>
+          </Field>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="학과" htmlFor="department" className="sm:col-span-2">
@@ -103,8 +122,8 @@ export function MemberForm({ action, member, maxCohort, submitLabel }: { action:
   )
 }
 
-export function CareerForm({ memberId, career, industries, jobFunctions }: { memberId: string; career?: Career; industries: string[]; jobFunctions: string[] }) {
-  const [state, formAction, pending] = useActionState(saveCareer, {})
+export function CareerForm({ memberId, career, industries, jobFunctions, action = saveCareer }: { memberId: string; career?: Career; industries: string[]; jobFunctions: string[]; action?: Action }) {
+  const [state, formAction, pending] = useActionState(action, {})
   const p = career?.id ?? 'new'
   const current = state.values ? state.values.is_current?.[0] === 'on' : (career?.is_current ?? false)
 

@@ -140,9 +140,10 @@ describe('수정 권한', () => {
     expect(before).toHaveLength(2)
   })
 
-  it('학회원은 경력을 추가할 수 없다', async () => {
+  // 자기 경력은 추가할 수 있다 (tests/db/self-edit.test.ts)
+  it('학회원은 다른 사람의 경력을 추가할 수 없다', async () => {
     await expect(
-      asUser(db, U.member, () => db.exec(`insert into public.careers (member_id, company) values ('${M.member}', '가짜')`)),
+      asUser(db, U.member, () => db.exec(`insert into public.careers (member_id, company) values ('${M.free}', '가짜')`)),
     ).rejects.toThrow(/row-level security/)
   })
 })

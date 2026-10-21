@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dbErrorMessage, parseCareer, parseMember } from '../lib/member-form'
+import { dbErrorMessage, parseCareer, parseMember, parseMyInfo } from '../lib/member-form'
 
 function form(entries: Record<string, string | string[]>): FormData {
   const f = new FormData()
@@ -44,6 +44,22 @@ describe('parseMember', () => {
     const r = parseMember(form(entries))
     expect(r.ok).toBe(false)
     expect(!r.ok && r.error).toContain(word)
+  })
+})
+
+describe('parseMyInfo', () => {
+  it('이름·기수·기수 역할은 보내도 받지 않는다', () => {
+    const r = parseMyInfo(form({ name: '바꾼이름', cohort: '1', cohort_role: '회장', department: '가짜학과', phone: '01012345678', hidden_fields: 'phone' }))
+    expect(r).toEqual({
+      ok: true,
+      value: { department: '가짜학과', student_year: null, phone: '010-1234-5678', personal_email: null, work_email: null, hidden_fields: ['phone'] },
+    })
+  })
+
+  it('이름·기수가 없어도 되고, 연락처 형식은 똑같이 검사한다', () => {
+    expect(parseMyInfo(form({})).ok).toBe(true)
+    const r = parseMyInfo(form({ personal_email: 'a@b' }))
+    expect(!r.ok && r.error).toContain('개인 이메일')
   })
 })
 
