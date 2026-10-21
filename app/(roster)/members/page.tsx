@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { requireApproved } from '@/lib/auth'
 import { loadRoster } from '@/lib/roster-data'
-import { ordinal, parseFilters } from '@/lib/roster'
+import { ordinal, parseFilters, todayKST } from '@/lib/roster'
 import { AppFrame, DoneNote, Hero } from '@/components/shell'
 import { MemberDirectory } from '@/components/member-directory'
 
@@ -37,6 +37,7 @@ async function Members({ searchParams }: { searchParams: PageProps<'/members'>['
         jobFunctions={jobFunctions}
         isAdmin={isAdmin}
         initial={parseFilters(params)}
+        today={todayKST()}
       />
     </AppFrame>
   )

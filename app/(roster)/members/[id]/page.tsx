@@ -4,9 +4,11 @@ import { notFound } from 'next/navigation'
 import { requireApproved } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
-import { yearMonth, type Career, type DirectoryMember } from '@/lib/roster'
-import { AppFrame, Badge, CohortLabel, cardClass, subtleButtonClass } from '@/components/shell'
+import { groupByCompany, isCurrent, todayKST, type Career, type DirectoryMember } from '@/lib/roster'
+import { domainMap, type CompanyDomain } from '@/lib/companies'
+import { AppFrame, CohortLabel, cardClass, subtleButtonClass } from '@/components/shell'
 import { MemberPhoto } from '@/components/member-photo'
+import { CareerGroups } from '@/components/career-groups'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,8 +41,13 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
     .order('started_on', { ascending: false, nullsFirst: false })
     .overrideTypes<Career[], { merge: false }>()
   const careers = data ?? []
-  const current = careers.filter((c) => c.is_current)
-  const past = careers.filter((c) => !c.is_current)
+  const { data: domains } = await supabase.from('company_domains').select('company, domain').overrideTypes<CompanyDomain[], { merge: false }>()
+  const logos = domainMap(domains ?? [])
+  const today = todayKST()
+  const groups = groupByCompany(careers, today)
+  const current = careers.filter((c) => isCurrent(c, today))
+  // 현직이 없으면 머리에 가장 최근 경력을 '전'으로 보여 준다
+  const headline = current.length ? current : groups[0] ? groups[0].careers.slice(0, 1) : []
 
   const school = [member.department, member.student_year !== null ? `${String(member.student_year).padStart(2, '0')}학번` : null]
     .filter(Boolean)
@@ -68,8 +75,9 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
             <CohortLabel cohort={member.cohort} role={member.cohort_role} />
             {school && <span>· {school}</span>}
           </p>
-          {current.map((c) => (
-            <p key={c.id} className="mt-1 text-[15px] font-medium text-ink">
+          {headline.map((c) => (
+            <p key={c.id} className={`mt-1 text-[15px] font-medium ${current.length ? 'text-ink' : 'text-muted'}`}>
+              {!current.length && '전 '}
               {[c.company, c.team, c.title].filter(Boolean).join(' · ')}
             </p>
           ))}
@@ -82,10 +90,7 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
           {careers.length === 0 ? (
             <p className="border-t border-line py-8 text-sm text-muted">등록된 경력이 없습니다.</p>
           ) : (
-            <>
-              <CareerList title="현직" items={current} />
-              <CareerList title="이전 경력" items={past} />
-            </>
+            <CareerGroups groups={groups} logos={logos} today={today} />
           )}
         </section>
 
@@ -104,39 +109,5 @@ async function Member({ params }: { params: PageProps<'/members/[id]'>['params']
         </aside>
       </div>
     </AppFrame>
-  )
-}
-
-// LinkedIn 경력처럼 회사 → 부서·직급 → 기간 순서로 한 줄씩
-function CareerList({ title, items }: { title: string; items: Career[] }) {
-  if (!items.length) return null
-  return (
-    <div className="mt-4">
-      <h3 className="mb-1 text-sm font-semibold text-slate">{title}</h3>
-      <ul className="divide-y divide-line border-y border-line">
-        {items.map((c) => (
-          <li key={c.id} className="flex gap-4 py-4">
-            <span aria-hidden className="flex size-12 shrink-0 items-center justify-center rounded bg-paper text-lg font-bold text-navy">
-              {c.company.slice(0, 1)}
-            </span>
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
-                {c.company}
-                {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
-              </p>
-              {(c.team || c.title) && <p className="text-sm text-ink">{[c.team, c.title].filter(Boolean).join(' · ')}</p>}
-              {(c.started_on || c.ended_on) && (
-                <p className="text-sm text-muted">
-                  {yearMonth(c.started_on) ?? '?'} – {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
-                </p>
-              )}
-              {(c.industry || c.job_function || c.region) && (
-                <p className="mt-1 text-xs text-slate">{[c.industry, c.job_function, c.region].filter(Boolean).join(' · ')}</p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
