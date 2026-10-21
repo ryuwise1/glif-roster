@@ -539,6 +539,21 @@ describe('설정과 목록', () => {
     await asUser(db, U.admin, () => db.exec(`insert into public.industries (name) values ('에너지')`))
     expect(await rows(U.member, `select * from public.industries where name = '에너지'`)).toHaveLength(1)
   })
+
+  it('회사 도메인은 관리자만 정하고, 승인된 학회원만 읽는다', async () => {
+    await asUser(db, U.admin, () => db.exec(`insert into public.company_domains (company, domain) values ('가짜은행', 'fakebank.example')`))
+    await asUser(db, U.member, () => db.exec(`insert into public.company_domains (company, domain) values ('가짜증권', 'fake.example')`)).catch(() => {})
+    await asUser(db, U.member, () => db.exec(`update public.company_domains set domain = 'evil.example'`))
+    expect(await rows(U.member, 'select company, domain from public.company_domains')).toEqual([{ company: '가짜은행', domain: 'fakebank.example' }])
+    expect(await rows(U.stranger, 'select * from public.company_domains')).toHaveLength(0)
+    await expect(rows(null, 'select * from public.company_domains')).rejects.toThrow(/permission denied/)
+  })
+
+  it('회사 도메인은 도메인 모양만 받는다', async () => {
+    for (const bad of ['javascript:alert(1)', 'Fake.example', 'localhost', 'a b.com']) {
+      await expect(asUser(db, U.admin, () => db.exec(`insert into public.company_domains (company, domain) values ('가짜', '${bad}')`))).rejects.toThrow(/check/)
+    }
+  })
 })
 
 describe('표 비우기 권한', () => {
@@ -551,7 +566,7 @@ describe('표 비우기 권한', () => {
   })
 
   it('로그인한 사람에게는 어떤 표의 TRUNCATE·REFERENCES·TRIGGER 권한도 없다', async () => {
-    const tables = ['settings', 'industries', 'job_functions', 'members', 'careers', 'accounts', 'audit_log']
+    const tables = ['settings', 'industries', 'job_functions', 'members', 'careers', 'accounts', 'audit_log', 'company_domains']
     for (const t of tables) {
       for (const priv of ['TRUNCATE', 'REFERENCES', 'TRIGGER']) {
         const { rows: [r] } = await db.query<{ ok: boolean }>(

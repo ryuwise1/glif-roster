@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { cohortGroups, filterMembers, ordinal, paginate, type Career, type DirectoryMember, type Filters, type RosterRow } from '@/lib/roster'
+import { cohortGroups, filterMembers, ordinal, paginate, yearMonth, type Career, type DirectoryMember, type Filters, type RosterRow } from '@/lib/roster'
 import { CohortLabel, inputClass, subtleButtonClass, underlineTabClass } from '@/components/shell'
 
 // 연명부 목록. 명단은 처음 한 번만 받아 오고, 기수·검색·쪽 이동은 서버를 다시 부르지 않고 바로 거른다.
@@ -27,6 +27,7 @@ export function MemberDirectory({
   jobFunctions,
   isAdmin,
   initial,
+  today,
 }: {
   members: DirectoryMember[]
   careers: Career[]
@@ -34,12 +35,13 @@ export function MemberDirectory({
   jobFunctions: string[]
   isAdmin: boolean
   initial: Filters
+  today: string
 }) {
   const [filters, setFilters] = useState(initial)
   const q = useDeferredValue(filters.q)
 
   const groups = useMemo(() => cohortGroups(members.map((m) => m.cohort)), [members])
-  const filtered = useMemo(() => filterMembers(members, careers, { ...filters, q }), [members, careers, filters, q])
+  const filtered = useMemo(() => filterMembers(members, careers, { ...filters, q }, today), [members, careers, filters, q, today])
   const { items, pages, page } = paginate(filtered, filters.page)
   const isFiltered = Boolean(filters.q || filters.industry || filters.jobFunction)
   const openGroup = groups.find((g) => g.start === filters.group)
@@ -107,12 +109,13 @@ export function MemberDirectory({
       </form>
 
       <section>
-        <div className="flex items-center justify-between gap-3 pb-3">
-          <h2 className="text-base font-bold text-ink" aria-live="polite">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pb-3">
+          <h2 className="whitespace-nowrap text-base font-bold text-ink" aria-live="polite">
             {isFiltered ? `검색 결과 ${filtered.length}명` : `${title} ${filtered.length}명`}
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             {pages > 1 && <span className="text-xs text-muted">{page} / {pages}쪽</span>}
+            {isAdmin && <Link href="/admin/companies" className={subtleButtonClass}>회사 로고</Link>}
             {isAdmin && <Link href="/admin/members/new" className={subtleButtonClass}>학회원 추가</Link>}
           </div>
         </div>
@@ -139,22 +142,25 @@ export function MemberDirectory({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line border-b border-line">
-                  {items.map((r) => (
-                    <tr key={r.id} className="align-top transition-colors hover:bg-paper/60 [&>td]:px-3 [&>td]:py-3">
-                      <td className="!pl-6 text-slate"><CohortLabel cohort={r.cohort} role={r.cohort_role} /></td>
-                      <td className="whitespace-nowrap leading-5">
-                        <Link href={`/members/${r.id}`} className="font-semibold text-ink hover:text-navy hover:underline">{r.name}</Link>
-                      </td>
-                      <JobCell jobs={r.current} pick={(c) => c.company} strong />
-                      <JobCell jobs={r.current} pick={(c) => c.team} />
-                      <JobCell jobs={r.current} pick={(c) => c.title} nowrap />
-                      <JobCell jobs={r.current} pick={(c) => c.industry} nowrap />
-                      <JobCell jobs={r.current} pick={(c) => c.job_function} nowrap />
-                      <td className="whitespace-nowrap !pr-6 leading-5">
-                        {r.phone ? <a href={`tel:${r.phone}`} className="text-ink hover:text-navy">{r.phone}</a> : <Empty />}
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((r) => {
+                    const { jobs, ended } = shownJobs(r)
+                    return (
+                      <tr key={r.id} className="align-top transition-colors hover:bg-paper/60 [&>td]:px-3 [&>td]:py-3">
+                        <td className="!pl-6 text-slate"><CohortLabel cohort={r.cohort} role={r.cohort_role} /></td>
+                        <td className="whitespace-nowrap leading-5">
+                          <Link href={`/members/${r.id}`} className="font-semibold text-ink hover:text-navy hover:underline">{r.name}</Link>
+                        </td>
+                        <JobCell jobs={jobs} ended={ended} pick={(c) => c.company} strong />
+                        <JobCell jobs={jobs} ended={ended} pick={(c) => c.team} />
+                        <JobCell jobs={jobs} ended={ended} pick={(c) => c.title} nowrap />
+                        <JobCell jobs={jobs} ended={ended} pick={(c) => c.industry} nowrap />
+                        <JobCell jobs={jobs} ended={ended} pick={(c) => c.job_function} nowrap />
+                        <td className="whitespace-nowrap !pr-6 leading-5">
+                          {r.phone ? <a href={`tel:${r.phone}`} className="text-ink hover:text-navy">{r.phone}</a> : <Empty />}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -190,18 +196,38 @@ function Empty() {
   return <span className="text-muted">-</span>
 }
 
+// 현직이 없으면 가장 최근 경력을 흐리게 '전' 표시와 함께 보여 준다
+function shownJobs(r: RosterRow): { jobs: Career[]; ended: boolean } {
+  return r.current.length ? { jobs: r.current, ended: false } : { jobs: r.past.slice(0, 1), ended: true }
+}
+
+function EndedTag({ c }: { c: Career }) {
+  return (
+    <span className="mr-1.5 inline-block rounded border border-line px-1 text-[11px] font-medium leading-4 text-muted" title={c.ended_on ? `${yearMonth(c.ended_on)}까지` : '지난 경력'}>
+      전
+    </span>
+  )
+}
+
 // 현직이 둘 이상이면 칸마다 같은 순서로 한 줄씩 쌓아 옆 칸과 줄이 맞게 한다.
 // 회사 이름(strong)은 줄바꿈하지 않는다
-function JobCell({ jobs, pick, strong, nowrap }: { jobs: Career[]; pick: (c: Career) => string | null; strong?: boolean; nowrap?: boolean }) {
+function JobCell({ jobs, ended, pick, strong, nowrap }: { jobs: Career[]; ended: boolean; pick: (c: Career) => string | null; strong?: boolean; nowrap?: boolean }) {
   if (!jobs.length || jobs.every((c) => !pick(c))) return <td className="leading-5"><Empty /></td>
+  const tone = ended ? 'text-muted' : strong ? 'font-medium text-ink' : 'text-slate'
   return (
-    <td className={`leading-5 ${strong || nowrap ? 'whitespace-nowrap' : ''} ${strong ? 'font-medium text-ink' : 'text-slate'}`}>
-      {jobs.map((c) => <div key={c.id} className="min-h-5">{pick(c) ?? <Empty />}</div>)}
+    <td className={`leading-5 ${strong || nowrap ? 'whitespace-nowrap' : ''} ${tone}`}>
+      {jobs.map((c) => (
+        <div key={c.id} className="min-h-5">
+          {strong && ended && <EndedTag c={c} />}
+          {pick(c) ?? <Empty />}
+        </div>
+      ))}
     </td>
   )
 }
 
 function MemberRow({ r }: { r: RosterRow }) {
+  const { jobs, ended } = shownJobs(r)
   return (
     <li>
       <Link href={`/members/${r.id}`} className="flex items-center gap-3 px-1 py-3.5">
@@ -210,16 +236,23 @@ function MemberRow({ r }: { r: RosterRow }) {
             {r.name}
             <CohortLabel cohort={r.cohort} role={r.cohort_role} className="text-xs font-normal text-slate" />
           </p>
-          {r.current.length ? (
-            r.current.map((c) => (
+          {jobs.length ? (
+            jobs.map((c) => (
               // 회사 이름은 한 줄에 두고, 부서·직급은 그 아래 줄에 둔다
               <div key={c.id} className="mt-0.5 min-w-0">
-                <p className="truncate text-sm font-medium text-ink">{c.company}</p>
-                {(c.team || c.title) && <p className="truncate text-xs text-slate">{[c.team, c.title].filter(Boolean).join(' · ')}</p>}
+                <p className={`truncate text-sm font-medium ${ended ? 'text-muted' : 'text-ink'}`}>
+                  {ended && <EndedTag c={c} />}
+                  {c.company}
+                </p>
+                {(c.team || c.title || (ended && c.ended_on)) && (
+                  <p className="truncate text-xs text-slate">
+                    {[c.team, c.title, ended && c.ended_on ? `~${yearMonth(c.ended_on)}` : null].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
             ))
           ) : (
-            <p className="mt-0.5 text-sm text-muted">현직 없음</p>
+            <p className="mt-0.5 text-sm text-muted">경력 없음</p>
           )}
           {r.phone && <p className="mt-0.5 text-xs text-muted">{r.phone}</p>}
         </div>

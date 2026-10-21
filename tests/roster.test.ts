@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { cohortGroups, filterMembers, ordinal, paginate, parseFilters, PAGE_SIZE, type Career, type DirectoryMember } from '../lib/roster'
+import {
+  careerPeriod,
+  careerSpan,
+  cohortGroups,
+  filterMembers,
+  groupByCompany,
+  isCurrent,
+  ordinal,
+  paginate,
+  parseFilters,
+  todayKST,
+  PAGE_SIZE,
+  type Career,
+  type DirectoryMember,
+} from '../lib/roster'
 
 // 모두 가짜 데이터
 const m = (id: string, name: string, cohort: number, cohort_role: DirectoryMember['cohort_role'] = null): DirectoryMember => ({
@@ -60,6 +74,24 @@ describe('필터', () => {
     expect(row.current.map((x) => x.company)).toEqual(['가짜증권'])
     expect(row.past.map((x) => x.company)).toEqual(['옛날운용'])
   })
+  it('끝난 달이 지난 경력은 현직으로 체크돼 있어도 이전 경력이다', () => {
+    const list = [
+      c('d', '끝난인턴', { kind: '인턴', ended_on: '2024-12-31', industry: '금융' }),
+      c('d', '이번달까지', { kind: '인턴', ended_on: '2026-10-01' }),
+    ]
+    const [row] = filterMembers(members, list, parseFilters({ q: '차카타' }), '2026-10-21')
+    expect(row.current.map((x) => x.company)).toEqual(['이번달까지'])
+    expect(row.past.map((x) => x.company)).toEqual(['끝난인턴'])
+    expect(filterMembers(members, list, parseFilters({ industry: '금융' }), '2026-10-21')).toEqual([])
+  })
+  it('이전 경력은 최근에 끝난 것부터 둔다', () => {
+    const past = [
+      c('d', '오래전', { is_current: false, started_on: '2018-01-01', ended_on: '2018-06-30' }),
+      c('d', '최근끝남', { is_current: false, started_on: '2016-01-01', ended_on: '2024-06-30' }),
+    ]
+    const [row] = filterMembers(members, past, parseFilters({ q: '차카타' }))
+    expect(row.past.map((x) => x.company)).toEqual(['최근끝남', '오래전'])
+  })
   it('전 직장은 최근에 시작한 것부터, 날짜 없는 것은 뒤에 둔다', () => {
     const past = [
       c('d', '날짜없음', { is_current: false }),
@@ -97,6 +129,45 @@ describe('기수 이름과 묶음', () => {
       { start: 1, label: '1st–10th', cohorts: [1, 3] },
       { start: 11, label: '11th–20th', cohorts: [11, 20] },
       { start: 21, label: '21st–30th', cohorts: [21] },
+    ])
+  })
+})
+
+describe('현직 판단과 기간', () => {
+  const T = '2026-10-21'
+  it('현직 체크 + 끝난 달이 없거나 아직 안 지났을 때만 현직이다', () => {
+    expect(isCurrent({ is_current: true, ended_on: null }, T)).toBe(true)
+    expect(isCurrent({ is_current: true, ended_on: '2026-10-01' }, T)).toBe(true)
+    expect(isCurrent({ is_current: true, ended_on: '2026-09-30' }, T)).toBe(false)
+    expect(isCurrent({ is_current: false, ended_on: null }, T)).toBe(false)
+  })
+  it('오늘 날짜는 한국 시간으로 센다', () => {
+    expect(todayKST(Date.UTC(2026, 9, 20, 15, 30))).toBe('2026-10-21')
+    expect(todayKST(Date.UTC(2026, 9, 20, 14, 30))).toBe('2026-10-20')
+  })
+  it('링크드인처럼 시작한 달과 끝난 달을 모두 센다', () => {
+    expect(careerSpan('2019-05-01', null, T)).toBe('7년 6개월')
+    expect(careerSpan('2016-04-01', '2016-08-31', T)).toBe('5개월')
+    expect(careerSpan('2024-01-01', '2024-12-31', T)).toBe('1년')
+    expect(careerSpan(null, '2024-12-31', T)).toBeNull()
+  })
+  it('기간은 현직이면 "현재", 끝난 달을 모르면 "?"로 쓴다', () => {
+    expect(careerPeriod(c('x', 'A', { started_on: '2019-05-01' }), T)).toBe('2019.05 – 현재 · 7년 6개월')
+    expect(careerPeriod(c('x', 'A', { is_current: false, started_on: '2016-04-01', ended_on: '2016-08-31' }), T)).toBe('2016.04 – 2016.08 · 5개월')
+    expect(careerPeriod(c('x', 'A', { started_on: '2024-07-01', ended_on: '2024-12-31' }), T)).toBe('2024.07 – 2024.12 · 6개월')
+    expect(careerPeriod(c('x', 'A', { is_current: false, started_on: '2024-03-01' }), T)).toBe('2024.03 – ?')
+    expect(careerPeriod(c('x', 'A'), T)).toBeNull()
+  })
+  it('같은 회사 경력은 하나로 묶고, 최근 경력이 있는 회사부터 둔다', () => {
+    const list = [
+      c('x', 'Big Bank', { id: '1', started_on: '2023-01-01' }),
+      c('x', '다른회사', { id: '2', is_current: false, started_on: '2022-01-01', ended_on: '2022-12-31' }),
+      c('x', 'big bank', { id: '3', is_current: false, started_on: '2021-01-01', ended_on: '2022-12-31' }),
+    ]
+    const groups = groupByCompany(list, T)
+    expect(groups.map((g) => [g.company, g.careers.map((x) => x.id), g.span])).toEqual([
+      ['Big Bank', ['1', '3'], '5년 10개월'],
+      ['다른회사', ['2'], '1년'],
     ])
   })
 })

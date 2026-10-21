@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
-import { describeCareer, yearMonth, type Career } from '@/lib/roster'
+import { careerPeriod, describeCareer, isCurrent, todayKST, type Career } from '@/lib/roster'
 import { AppFrame, Badge, DoneNote, ErrorNote, PageHeader, SectionTitle, cardClass, dangerButtonClass, subtleButtonClass } from '@/components/shell'
 import { deleteCareer, deleteMember, updateMember } from '../actions'
 import { CareerForm, ConfirmButton, MemberForm, type EditableMember } from '../forms'
@@ -58,6 +58,7 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
   ])
   if (!member) notFound()
   const careers = careerRows ?? []
+  const today = todayKST()
   const industryNames = (industries.data ?? []).map((r) => r.name as string)
   const jobNames = (jobFunctions.data ?? []).map((r) => r.name as string)
 
@@ -88,14 +89,12 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
                         {describeCareer(c)}
-                        {c.is_current && <Badge tone="navy">현직</Badge>}
+                        {isCurrent(c, today) && <Badge tone="navy">현직</Badge>}
+                        {/* 현직으로 체크했지만 끝난 달이 지나 이전 경력으로 보이는 경우 */}
+                        {c.is_current && !isCurrent(c, today) && <Badge tone="outline">기간 끝남</Badge>}
                         {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
                       </span>
-                      {(c.started_on || c.ended_on) && (
-                        <span className="font-display text-xs font-medium text-muted">
-                          {yearMonth(c.started_on) ?? '?'} – {c.is_current && !c.ended_on ? '현재' : (yearMonth(c.ended_on) ?? '?')}
-                        </span>
-                      )}
+                      {careerPeriod(c, today) && <span className="font-display text-xs font-medium text-muted">{careerPeriod(c, today)}</span>}
                     </span>
                     <span className="text-sm font-medium text-navy group-open:hidden">수정</span>
                     <span className="hidden text-sm font-medium text-slate group-open:inline">접기</span>
