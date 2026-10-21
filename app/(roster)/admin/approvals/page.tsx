@@ -25,6 +25,15 @@ type Pending = {
   members: { name: string; cohort: number } | null
 }
 
+type AutoApproved = {
+  user_id: string
+  email: string | null
+  login_name: string | null
+  decided_at: string | null
+  members: { name: string; cohort: number } | null
+}
+const AUTO_LIMIT = 30
+
 export default function ApprovalsPage({ searchParams }: PageProps<'/admin/approvals'>) {
   return (
     <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
@@ -48,6 +57,15 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
     .overrideTypes<Pending[], { merge: false }>()
   const list = data ?? []
   const linkedCount = list.filter((a) => a.member_id !== null).length
+  // 드라이브 명단으로 자동 승인된 계정. 다른 사람을 골라 신청했을 수도 있으니 관리자가 훑어볼 수 있게 보여 준다
+  const { data: autoData } = await supabase
+    .from('accounts')
+    .select('user_id, email, login_name, decided_at, members(name, cohort)')
+    .eq('auto_approved', true)
+    .order('decided_at', { ascending: false })
+    .limit(AUTO_LIMIT)
+    .overrideTypes<AutoApproved[], { merge: false }>()
+  const autoList = autoData ?? []
 
   return (
     <AppFrame email={email} isAdmin active="approvals">
@@ -122,6 +140,30 @@ async function Approvals({ searchParams }: { searchParams: PageProps<'/admin/app
             })}
           </ul>
         </>
+      )}
+
+      {autoList.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-1 text-lg font-bold text-ink">드라이브 명단으로 자동 승인</h2>
+          <p className="mb-3 text-sm text-slate">
+            학회 드라이브를 공유받은 계정이라 바로 승인됐습니다. 고른 이름과 로그인 이름이 다르면 확인해 주세요. 최근 {AUTO_LIMIT}건까지 보입니다.
+          </p>
+          <ul className="divide-y divide-line border-y border-line text-sm">
+            {autoList.map((a) => {
+              const matched = nameMatches(a.login_name, a.members?.name ?? null)
+              return (
+                <li key={a.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-3">
+                  <span className="font-semibold text-ink">{a.members?.name ?? '-'}</span>
+                  {a.members && <span className="text-slate">{a.members.cohort}기</span>}
+                  {matched ? <Badge tone="ok">이름 일치</Badge> : <Badge tone="outline">이름 확인</Badge>}
+                  <span className="text-slate">로그인 이름 {a.login_name ?? '(없음)'}</span>
+                  <span className="break-all text-muted">{a.email ?? ''}</span>
+                  {a.decided_at && <span className="ml-auto text-xs text-muted">{new Date(a.decided_at).toLocaleDateString('ko-KR')}</span>}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
       )}
     </AppFrame>
   )

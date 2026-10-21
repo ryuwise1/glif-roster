@@ -32,5 +32,6 @@ export async function submitSignup(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase.from('accounts').insert(row)
   if (error) back(error.message.includes('이미 다른 계정과 연결된') ? 'taken' : 'failed')
-  redirect('/pending')
+  // 학회 드라이브를 공유받은 계정은 DB 가 신청과 함께 바로 승인하므로, 갈 곳은 홈(/)이 상태를 보고 정한다
+  redirect('/')
 }
