@@ -57,14 +57,22 @@ export function Hero({ title, sub, size = 'lg' }: { title: string; sub?: string;
 }
 
 // 로그인 전 화면(로그인·가입 신청·승인 대기): 머리말 사진 + 가운데 카드
-export function Shell({ title, children }: { title: string; children: ReactNode }) {
+// brand: 제목 대신 카드 가운데에 GLIF 로고를 둔다 (로그인 화면)
+export function Shell({ title, brand, children }: { title: string; brand?: boolean; children: ReactNode }) {
   return (
     <>
       <TopBar />
       <Hero title="Directory" sub="성균관대학교 금융투자학회 GLIF 학회원 연명부" size="sm" />
       <main className="flex flex-1 items-start justify-center px-4 py-10 sm:py-14">
         <div className={`${cardClass} w-full max-w-md sm:p-8`}>
-          <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">{title}</h2>
+          {brand ? (
+            <h2 className="mb-6 flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/glif-logo-navy.png" alt={title} width={480} height={254} className="h-14 w-auto" />
+            </h2>
+          ) : (
+            <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">{title}</h2>
+          )}
           {children}
         </div>
       </main>

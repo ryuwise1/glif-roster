@@ -1,17 +1,17 @@
-import { Suspense } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import { getAccess, homeFor } from '@/lib/auth'
 import { ErrorNote, Shell } from '@/components/shell'
-import { signInWithGoogle } from '../actions'
+import { signInWithGoogle, signInWithKakao } from '../actions'
 
 const ERRORS: Record<string, string> = {
-  start: '구글 로그인을 시작하지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
+  start: '로그인을 시작하지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
   callback: '로그인을 마치지 못했습니다. 다시 로그인해 주세요.',
 }
 
 export default function LoginPage({ searchParams }: PageProps<'/login'>) {
   return (
-    <Suspense fallback={<Shell title="GLIF 연명부">{null}</Shell>}>
+    <Suspense fallback={<Shell title="GLIF 연명부" brand>{null}</Shell>}>
       <Login searchParams={searchParams} />
     </Suspense>
   )
@@ -22,23 +22,51 @@ async function Login({ searchParams }: { searchParams: PageProps<'/login'>['sear
   if (access.state !== 'anon') redirect(homeFor(access))
   const { error } = await searchParams
   const message = typeof error === 'string' ? ERRORS[error] : undefined
+  const kakao = process.env.KAKAO_LOGIN === 'on'
 
   return (
-    <Shell title="GLIF 연명부">
-      <p className="mb-6 text-sm leading-6 text-slate">
-        학회원만 볼 수 있습니다. 로그인 후 가입 신청을 하면 회장 확인을 거쳐 열립니다.
-      </p>
+    <Shell title="GLIF 연명부" brand>
+      <div className="mb-6 space-y-1 break-keep text-balance text-center text-sm leading-6">
+        <p className="text-ink">GLIF 구글 드라이브 계정으로 로그인하면 가입 신청 즉시 승인됩니다.</p>
+        <p className="text-muted">다른 계정은 회장 승인 후 이용할 수 있습니다.</p>
+      </div>
       {message && <ErrorNote>{message}</ErrorNote>}
-      <form action={signInWithGoogle}>
-        <button
-          type="submit"
-          className="inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded border border-line bg-white px-5 text-sm font-semibold text-ink transition-colors hover:border-navy"
-        >
-          <GoogleMark />
-          Google로 로그인
-        </button>
-      </form>
+      <div className="space-y-2.5">
+        <form action={signInWithGoogle}>
+          <LoginButton className="border border-line bg-white text-ink hover:border-navy" icon={<GoogleMark />}>
+            Google로 로그인
+          </LoginButton>
+        </form>
+        {kakao && (
+          <form action={signInWithKakao}>
+            {/* 카카오 디자인 안내: 바탕 #FEE500, 글자 85% 검정 */}
+            <LoginButton className="bg-[#FEE500] text-black/85 hover:brightness-95" icon={<KakaoMark />}>
+              카카오로 로그인
+            </LoginButton>
+          </form>
+        )}
+      </div>
     </Shell>
+  )
+}
+
+function LoginButton({ className, icon, children }: { className: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <button
+      type="submit"
+      className={`inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded px-5 text-sm font-semibold transition ${className}`}
+    >
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+function KakaoMark() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="size-5">
+      <path fill="#000" d="M12 3C6.48 3 2 6.54 2 10.9c0 2.8 1.86 5.27 4.66 6.67l-.95 3.5c-.08.3.26.55.53.37l4.17-2.77c.52.06 1.05.1 1.59.1 5.52 0 10-3.54 10-7.87S17.52 3 12 3z" />
+    </svg>
   )
 }
 
