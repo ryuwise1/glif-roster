@@ -12,24 +12,14 @@ async function siteOrigin(): Promise<string> {
   return `${proto}://${host}`
 }
 
-async function signInWith(provider: 'google' | 'kakao') {
+export async function signInWithGoogle() {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
+    provider: 'google',
     options: { redirectTo: `${await siteOrigin()}/auth/callback` },
   })
   if (error || !data.url) redirect('/login?error=start')
   redirect(data.url)
-}
-
-export async function signInWithGoogle() {
-  await signInWith('google')
-}
-
-// 카카오는 Supabase 에서 카카오 로그인을 켠 뒤 환경변수 KAKAO_LOGIN=on 으로 버튼을 보인다
-export async function signInWithKakao() {
-  if (process.env.KAKAO_LOGIN !== 'on') redirect('/login?error=start')
-  await signInWith('kakao')
 }
 
 export async function signOut() {
