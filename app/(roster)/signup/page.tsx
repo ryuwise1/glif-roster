@@ -38,7 +38,7 @@ async function Signup({ searchParams }: { searchParams: PageProps<'/signup'>['se
   return (
     <Shell title="가입 신청">
       <p className="mb-5 text-sm leading-6 text-slate">
-        <span className="font-medium text-ink">{access.email ?? '로그인한 계정'}</span>으로 로그인했습니다. 기수를 고르고 본인 이름을 선택하면 회장에게 승인 요청이 갑니다.
+        <span className="font-medium text-ink">{access.email ?? '로그인한 계정'}</span>으로 로그인했습니다. 기수를 고르고 본인 이름을 선택하면 회장에게 승인 요청이 갑니다. 학회 구글 드라이브를 공유받은 계정이면 바로 승인됩니다.
       </p>
       {error && <ErrorNote>{error}</ErrorNote>}
 

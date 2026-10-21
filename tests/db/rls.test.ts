@@ -590,7 +590,11 @@ describe('함수 실행 권한', () => {
     expect(await rows(U.stranger, 'select count(*)::int as n from public.signup_candidates(19)')).toEqual([{ n: 1 }])
   })
 
-  it('public 의 어떤 함수도 PUBLIC 이나 anon 에게 실행 권한이 없다', async () => {
+  // 예외는 하나: 드라이브 명단 동기화. 로그인할 수 없는 Apps Script 가 부르므로 anon 에게 열고,
+  // 대신 함수 안에서 동기화 키를 확인한다 (tests/db/drive-access.test.ts)
+  const ANON_ALLOWED = ['sync_drive_access(text,text[])']
+
+  it('public 의 어떤 함수도 PUBLIC 에게 실행 권한이 없고, anon 은 동기화 함수만 부를 수 있다', async () => {
     const { rows: fns } = await db.query<{ sig: string; public_exec: boolean; anon_exec: boolean }>(
       `select p.oid::regprocedure::text as sig,
               exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
@@ -600,7 +604,8 @@ describe('함수 실행 권한', () => {
        where n.nspname = 'public'`,
     )
     expect(fns.length).toBeGreaterThan(5)
-    expect(fns.filter((f) => f.public_exec || f.anon_exec)).toEqual([])
+    expect(fns.filter((f) => f.public_exec || (f.anon_exec && !ANON_ALLOWED.includes(f.sig)))).toEqual([])
+    expect(fns.filter((f) => f.anon_exec).map((f) => f.sig)).toEqual(ANON_ALLOWED)
   })
 
   it('로그인한 사람에게는 정책과 앱이 쓰는 함수의 실행 권한이 있다', async () => {
