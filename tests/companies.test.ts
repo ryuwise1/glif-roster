@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { domainMap, googleIconUrls, logoSrc, normCompany, parseDomain, pngWidth } from '../lib/companies'
+import { domainMap, googleIconUrls, icoWidth, iconInfo, iconLinks, logoSrc, normCompany, parseDomain, pngWidth } from '../lib/companies'
 
 // 모두 가짜 데이터
 describe('회사 이름 맞추기', () => {
@@ -56,5 +56,54 @@ describe('PNG 크기', () => {
   it('PNG 가 아니면 null', () => {
     expect(pngWidth(new TextEncoder().encode('<html>not an image at all</html>'))).toBeNull()
     expect(pngWidth(new Uint8Array(4))).toBeNull()
+  })
+})
+
+describe('ICO 크기와 아이콘 종류', () => {
+  // 가짜 ICO: 머리 6바이트 + 그림마다 16바이트 목록 (첫 바이트가 가로, 0 은 256)
+  const ico = (...widths: number[]) => {
+    const b = new Uint8Array(6 + widths.length * 16)
+    b.set([0, 0, 1, 0, widths.length, 0])
+    widths.forEach((w, i) => (b[6 + i * 16] = w))
+    return b
+  }
+  it('ICO 에 든 그림 중 가장 큰 가로 크기를 읽는다', () => {
+    expect(icoWidth(ico(16, 32))).toBe(32)
+    expect(icoWidth(ico(16, 0))).toBe(256)
+  })
+  it('ICO 가 아니거나 목록이 잘렸으면 null', () => {
+    expect(icoWidth(new TextEncoder().encode('<html>not an icon at all</html>'))).toBeNull()
+    expect(icoWidth(ico(16).slice(0, 10))).toBeNull()
+  })
+  it('PNG·ICO 를 구분하고, 둘 다 아니면 null', () => {
+    const png = new Uint8Array(24)
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    new DataView(png.buffer).setUint32(16, 180)
+    expect(iconInfo(png)).toEqual({ type: 'image/png', width: 180 })
+    expect(iconInfo(ico(32))).toEqual({ type: 'image/x-icon', width: 32 })
+    expect(iconInfo(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBeNull()
+  })
+})
+
+describe('홈페이지의 아이콘 주소', () => {
+  const page = 'https://www.fakebank.example/ko/index.html'
+  it('rel 에 icon 이 든 링크를 페이지 주소 기준으로 바꾸고, 기본 위치 두 곳을 덧붙인다', () => {
+    const html = `<head>
+      <link rel="stylesheet" href="/a.css">
+      <link rel="shortcut icon" href="/img/fav.ico">
+      <LINK REL='apple-touch-icon' sizes='180x180' HREF='touch.png'>
+      <link href="https://cdn.fakebank.example/i/192.png" rel="icon" type="image/png">
+    </head>`
+    expect(iconLinks(html, page)).toEqual([
+      'https://www.fakebank.example/img/fav.ico',
+      'https://www.fakebank.example/ko/touch.png',
+      'https://cdn.fakebank.example/i/192.png',
+      'https://www.fakebank.example/apple-touch-icon.png',
+      'https://www.fakebank.example/favicon.ico',
+    ])
+  })
+  it('http(s) 가 아닌 주소와 같은 주소 중복은 뺀다', () => {
+    const html = `<link rel="icon" href="data:image/png;base64,AAAA"><link rel="icon" href="javascript:alert(1)"><link rel="icon" href="/favicon.ico">`
+    expect(iconLinks(html, page)).toEqual(['https://www.fakebank.example/favicon.ico', 'https://www.fakebank.example/apple-touch-icon.png'])
   })
 })
