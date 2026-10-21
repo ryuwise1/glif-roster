@@ -49,6 +49,14 @@ export function parseMember(form: Form): Parsed<MemberInput> {
   const role = text(form, 'cohort_role')
   if (role !== null && !ROLES.includes(role as CohortRole)) return fail('역할은 회장·부회장 가운데 고르거나 비워 두세요.')
 
+  const info = parseMyInfo(form)
+  return info.ok ? { ok: true, value: { name, cohort, cohort_role: role as CohortRole | null, ...info.value } } : info
+}
+
+// 내 정보 수정에서 본인이 고칠 수 있는 항목. 이름·기수·기수 역할은 관리자만 고친다.
+export type MyInfoInput = Omit<MemberInput, 'name' | 'cohort' | 'cohort_role'>
+
+export function parseMyInfo(form: Form): Parsed<MyInfoInput> {
   const yearText = text(form, 'student_year')
   const studentYear = yearText === null ? null : Number(yearText)
   if (yearText !== null && (!/^\d{1,2}$/.test(yearText) || studentYear! > 99)) return fail('학번은 두 자리 숫자로 적어 주세요. (예: 21)')
@@ -71,9 +79,6 @@ export function parseMember(form: Form): Parsed<MemberInput> {
   return {
     ok: true,
     value: {
-      name,
-      cohort,
-      cohort_role: role as CohortRole | null,
       department: text(form, 'department'),
       student_year: studentYear,
       phone,

@@ -4,10 +4,11 @@ import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
-import { careerPeriod, describeCareer, isCurrent, todayKST, type Career } from '@/lib/roster'
-import { AppFrame, Badge, DoneNote, ErrorNote, PageHeader, SectionTitle, cardClass, dangerButtonClass, subtleButtonClass } from '@/components/shell'
-import { deleteCareer, deleteMember, updateMember } from '../actions'
-import { CareerForm, ConfirmButton, MemberForm, type EditableMember } from '../forms'
+import type { Career } from '@/lib/roster'
+import { AppFrame, DoneNote, ErrorNote, PageHeader, SectionTitle, cardClass, dangerButtonClass, subtleButtonClass } from '@/components/shell'
+import { CareerEditor } from '@/components/career-editor'
+import { deleteCareer, deleteMember, saveCareer, updateMember } from '../actions'
+import { ConfirmButton, MemberForm, type EditableMember } from '../forms'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -58,7 +59,6 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
   ])
   if (!member) notFound()
   const careers = careerRows ?? []
-  const today = todayKST()
   const industryNames = (industries.data ?? []).map((r) => r.name as string)
   const jobNames = (jobFunctions.data ?? []).map((r) => r.name as string)
 
@@ -78,46 +78,14 @@ async function EditMember({ params, searchParams }: Pick<PageProps<'/admin/membe
           <MemberForm action={updateMember} member={member} maxCohort={settings?.current_cohort ?? 100} submitLabel="기본 정보 저장" />
         </section>
 
-        <section className={cardClass}>
-          <SectionTitle title={`경력 ${careers.length}건`} />
-          {careers.length === 0 && <p className="mb-4 text-sm text-muted">등록된 경력이 없습니다.</p>}
-          <ul className={careers.length ? 'divide-y divide-line border-y border-line' : 'hidden'}>
-            {careers.map((c) => (
-              <li key={c.id}>
-                <details className="group py-3">
-                  <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
-                        {describeCareer(c)}
-                        {isCurrent(c, today) && <Badge tone="navy">현직</Badge>}
-                        {/* 현직으로 체크했지만 끝난 달이 지나 이전 경력으로 보이는 경우 */}
-                        {c.is_current && !isCurrent(c, today) && <Badge tone="outline">기간 끝남</Badge>}
-                        {c.kind !== '정규' && <Badge>{c.kind}</Badge>}
-                      </span>
-                      {careerPeriod(c, today) && <span className="font-display text-xs font-medium text-muted">{careerPeriod(c, today)}</span>}
-                    </span>
-                    <span className="text-sm font-medium text-navy group-open:hidden">수정</span>
-                    <span className="hidden text-sm font-medium text-slate group-open:inline">접기</span>
-                  </summary>
-                  <div className="mt-4 rounded border border-line bg-paper/60 p-4">
-                    <CareerForm memberId={member.id} career={c} industries={industryNames} jobFunctions={jobNames} />
-                    <form action={deleteCareer} className="mt-3 border-t border-line pt-3">
-                      <input type="hidden" name="member_id" value={member.id} />
-                      <input type="hidden" name="career_id" value={c.id} />
-                      <ConfirmButton message={`'${describeCareer(c)}' 경력을 삭제할까요?`} className={dangerButtonClass}>이 경력 삭제</ConfirmButton>
-                    </form>
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ul>
-          <details className="mt-4" open={careers.length === 0}>
-            <summary className={`${subtleButtonClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>+ 경력 추가</summary>
-            <div className="mt-4 rounded border border-line bg-paper/60 p-4">
-              <CareerForm memberId={member.id} industries={industryNames} jobFunctions={jobNames} />
-            </div>
-          </details>
-        </section>
+        <CareerEditor
+          memberId={member.id}
+          careers={careers}
+          industries={industryNames}
+          jobFunctions={jobNames}
+          saveAction={saveCareer}
+          deleteAction={deleteCareer}
+        />
 
         <section className="rounded-lg border border-danger/30 bg-white p-5 sm:p-6">
           <SectionTitle title="학회원 삭제" />
