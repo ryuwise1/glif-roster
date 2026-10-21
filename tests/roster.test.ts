@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterMembers, paginate, parseFilters, PAGE_SIZE, type Career, type DirectoryMember } from '../lib/roster'
+import { cohortGroups, filterMembers, ordinal, paginate, parseFilters, PAGE_SIZE, type Career, type DirectoryMember } from '../lib/roster'
 
 // 모두 가짜 데이터
 const m = (id: string, name: string, cohort: number, cohort_role: DirectoryMember['cohort_role'] = null): DirectoryMember => ({
@@ -43,6 +43,10 @@ describe('필터', () => {
   it('기수로 거른다', () => {
     expect(filterMembers(members, careers, parseFilters({ cohort: '20' })).map((r) => r.id)).toEqual(['c', 'b'])
   })
+  it('기수 묶음으로 거른다', () => {
+    expect(filterMembers(members, careers, parseFilters({ group: '11' })).map((r) => r.id)).toEqual(['d', 'a', 'c', 'b'])
+    expect(filterMembers([...members, m('e', '파하', 21)], careers, parseFilters({ group: '21' })).map((r) => r.id)).toEqual(['e'])
+  })
   it('업종은 현직 기준이다 (전 직장의 업종은 세지 않는다)', () => {
     expect(filterMembers(members, careers, parseFilters({ jobFunction: '운용' }))).toEqual([])
     expect(filterMembers(members, careers, parseFilters({ jobFunction: '리서치' })).map((r) => r.id)).toEqual(['a'])
@@ -70,11 +74,30 @@ describe('필터', () => {
 describe('주소 값 해석', () => {
   it('이상한 값은 무시하고 기본값을 쓴다', () => {
     expect(parseFilters({ cohort: 'abc', page: '-1', q: ['x', 'y'] })).toEqual({
-      q: '', cohort: null, industry: '', jobFunction: '', page: 1,
+      q: '', group: null, cohort: null, industry: '', jobFunction: '', page: 1,
     })
+  })
+  it('기수를 고르면 묶음은 그 기수가 든 묶음이 된다', () => {
+    expect(parseFilters({ cohort: '17', group: '1' })).toMatchObject({ cohort: 17, group: 11 })
+    expect(parseFilters({ group: '15' })).toMatchObject({ cohort: null, group: 11 })
   })
   it('검색어는 50자까지만 쓴다', () => {
     expect(parseFilters({ q: 'ㄱ'.repeat(80) }).q).toHaveLength(50)
+  })
+})
+
+describe('기수 이름과 묶음', () => {
+  it('영어 서수로 쓴다', () => {
+    expect([1, 2, 3, 4, 10, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal)).toEqual(
+      ['1st', '2nd', '3rd', '4th', '10th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st', '111th'],
+    )
+  })
+  it('있는 기수만 10개씩 묶는다', () => {
+    expect(cohortGroups([20, 3, 1, 11, 3, 21])).toEqual([
+      { start: 1, label: '1st–10th', cohorts: [1, 3] },
+      { start: 11, label: '11th–20th', cohorts: [11, 20] },
+      { start: 21, label: '21st–30th', cohorts: [21] },
+    ])
   })
 })
 

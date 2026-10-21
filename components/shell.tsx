@@ -163,15 +163,16 @@ export function UnderlineTabs({ children, label }: { children: ReactNode; label:
   )
 }
 
+// small: 홈페이지 기수 탭의 둘째 줄(묶음 안의 기수)처럼 작게
+export function underlineTabClass(active: boolean, small = false) {
+  return `-mb-px shrink-0 border-b-2 transition-colors ${small ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-[15px]'} ${
+    active ? 'border-navy font-semibold text-ink' : 'border-transparent text-slate hover:text-ink'
+  }`
+}
+
 export function UnderlineTab({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
-    <Link
-      href={href}
-      aria-current={active ? 'page' : undefined}
-      className={`-mb-px shrink-0 border-b-2 px-4 py-3 text-[15px] transition-colors ${
-        active ? 'border-navy font-semibold text-ink' : 'border-transparent text-slate hover:text-ink'
-      }`}
-    >
+    <Link href={href} aria-current={active ? 'page' : undefined} className={underlineTabClass(active)}>
       {children}
     </Link>
   )
