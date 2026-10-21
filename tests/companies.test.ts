@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { domainMap, logoSrc, normCompany, parseDomain } from '../lib/companies'
+import { domainMap, logoSrcs, normCompany, parseDomain } from '../lib/companies'
 
 // 모두 가짜 데이터
 describe('회사 이름 맞추기', () => {
@@ -28,8 +28,11 @@ describe('도메인 입력', () => {
 })
 
 describe('로고 주소', () => {
-  it('키가 없으면 구글 아이콘, 있으면 logo.dev 를 쓴다', () => {
-    expect(logoSrc('fakebank.example')).toBe('https://www.google.com/s2/favicons?domain=fakebank.example&sz=128')
-    expect(logoSrc('fakebank.example', 'pk_test')).toBe('https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true')
+  it('키가 없으면 구글 아이콘을 맨 도메인, www. 순으로, 있으면 logo.dev 를 쓴다', () => {
+    expect(logoSrcs('fakebank.example', '')).toEqual([
+      'https://www.google.com/s2/favicons?domain=fakebank.example&sz=128',
+      'https://www.google.com/s2/favicons?domain=www.fakebank.example&sz=128',
+    ])
+    expect(logoSrcs('fakebank.example', 'pk_test')).toEqual(['https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true'])
   })
 })
