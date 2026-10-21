@@ -19,10 +19,10 @@ export function parseDomain(input: string): string | null {
   return DOMAIN.test(host) ? host : null
 }
 
-// logo.dev 공개 키(NEXT_PUBLIC_LOGO_DEV_TOKEN)가 있으면 그 로고를, 없으면 키 없이 쓰는 구글 아이콘을 쓴다
-export function logoSrc(domain: string, token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN): string {
-  const d = encodeURIComponent(domain)
-  return token
-    ? `https://img.logo.dev/${d}?token=${encodeURIComponent(token)}&size=128&format=png&retina=true`
-    : `https://www.google.com/s2/favicons?domain=${d}&sz=128`
+// logo.dev 공개 키(NEXT_PUBLIC_LOGO_DEV_TOKEN)가 있으면 그 로고를, 없으면 키 없이 쓰는 구글 아이콘을 쓴다.
+// 구글은 한국 회사 상당수를 www. 를 붙여야 찾으므로 앞 주소가 안 되면 다음 주소를 시도한다
+export function logoSrcs(domain: string, token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN): string[] {
+  if (token) return [`https://img.logo.dev/${encodeURIComponent(domain)}?token=${encodeURIComponent(token)}&size=128&format=png&retina=true`]
+  const google = (d: string) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128`
+  return [google(domain), google(`www.${domain}`)]
 }

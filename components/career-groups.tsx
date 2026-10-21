@@ -7,11 +7,19 @@ import { CompanyLogo } from '@/components/company-logo'
 // 같은 회사에서 여러 번 일했으면 회사 이름 아래에 직책을 선으로 이어 쌓는다.
 export function CareerGroups({ groups, logos, today }: { groups: CareerGroup[]; logos: Map<string, string>; today: string }) {
   return (
-    <ul className="divide-y divide-line border-y border-line">
-      {groups.map((g) => (
-        <CareerGroupItem key={g.careers[0].id} group={g} domain={logos.get(normCompany(g.company)) ?? null} today={today} />
-      ))}
-    </ul>
+    <>
+      <ul className="divide-y divide-line border-y border-line">
+        {groups.map((g) => (
+          <CareerGroupItem key={g.careers[0].id} group={g} domain={logos.get(normCompany(g.company)) ?? null} today={today} />
+        ))}
+      </ul>
+      {/* logo.dev 무료 요금제는 출처 표기가 조건이다 */}
+      {process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN && (
+        <p className="mt-2 text-right text-[11px] text-muted">
+          <a href="https://logo.dev" target="_blank" rel="noreferrer" className="hover:underline">Logos provided by Logo.dev</a>
+        </p>
+      )}
+    </>
   )
 }
 
