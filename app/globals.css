@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
+/* GLIF 공식 홈페이지(glifskku.com)와 같은 색·글꼴. 본문은 Pretendard, 영문 제목은 Montserrat. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --navy: #172058;
+  --navy-deep: #0e1640;
+  --ink: #1a1d24;
+  --slate: #5b6470;
+  --muted: #9ba3af;
+  --paper: #f2f4f8;
+  --line: #e4e6ea;
+  --danger: #c0392b;
+  --ok: #1f7a4d;
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-muted: var(--muted);
+  --color-paper: var(--paper);
+  --color-line: var(--line);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+  --font-display: var(--font-montserrat), "Pretendard Variable", Pretendard, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
