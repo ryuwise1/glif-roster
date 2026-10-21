@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { domainMap, logoSrcs, normCompany, parseDomain } from '../lib/companies'
+import { domainMap, googleIconUrls, logoSrc, normCompany, parseDomain, pngWidth } from '../lib/companies'
 
 // 모두 가짜 데이터
 describe('회사 이름 맞추기', () => {
@@ -28,11 +28,33 @@ describe('도메인 입력', () => {
 })
 
 describe('로고 주소', () => {
-  it('키가 없으면 구글 아이콘을 맨 도메인, www. 순으로, 있으면 logo.dev 를 쓴다', () => {
-    expect(logoSrcs('fakebank.example', '')).toEqual([
+  it('키가 없으면 우리 서버의 /api/logo, 있으면 logo.dev 를 쓴다', () => {
+    expect(logoSrc('fakebank.example', '')).toBe('/api/logo/fakebank.example')
+    expect(logoSrc('fakebank.example', 'pk_test')).toBe(
+      'https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true&fallback=404',
+    )
+  })
+  it('서버는 구글 아이콘을 맨 도메인, www. 순으로 본다', () => {
+    expect(googleIconUrls('fakebank.example')).toEqual([
       'https://www.google.com/s2/favicons?domain=fakebank.example&sz=128',
       'https://www.google.com/s2/favicons?domain=www.fakebank.example&sz=128',
     ])
-    expect(logoSrcs('fakebank.example', 'pk_test')).toEqual(['https://img.logo.dev/fakebank.example?token=pk_test&size=128&format=png&retina=true'])
+  })
+})
+
+describe('PNG 크기', () => {
+  const png = (w: number) => {
+    const b = new Uint8Array(24)
+    b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    new DataView(b.buffer).setUint32(16, w)
+    return b
+  }
+  it('PNG 머리에서 가로 크기를 읽는다', () => {
+    expect(pngWidth(png(16))).toBe(16)
+    expect(pngWidth(png(128))).toBe(128)
+  })
+  it('PNG 가 아니면 null', () => {
+    expect(pngWidth(new TextEncoder().encode('<html>not an image at all</html>'))).toBeNull()
+    expect(pngWidth(new Uint8Array(4))).toBeNull()
   })
 })
