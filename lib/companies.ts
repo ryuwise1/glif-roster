@@ -40,3 +40,41 @@ export function pngWidth(b: Uint8Array): number | null {
   if (b.length < 24 || sig.some((v, i) => b[i] !== v)) return null
   return ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19]) >>> 0
 }
+
+// ICO 묶음에 든 그림 중 가장 큰 것의 가로 크기(값 0 은 256). ICO 가 아니면 null
+export function icoWidth(b: Uint8Array): number | null {
+  if (b.length < 22 || b[0] !== 0 || b[1] !== 0 || b[2] !== 1 || b[3] !== 0) return null
+  const n = b[4] | (b[5] << 8)
+  if (n === 0 || 6 + n * 16 > b.length) return null
+  let max = 0
+  for (let i = 0; i < n; i++) max = Math.max(max, b[6 + i * 16] || 256)
+  return max
+}
+
+// 아이콘 그림의 종류와 가로 크기. PNG·ICO 가 아니면 null (SVG·HTML 오류 화면 등은 쓰지 않는다)
+export function iconInfo(b: Uint8Array): { type: 'image/png' | 'image/x-icon'; width: number } | null {
+  const png = pngWidth(b)
+  if (png) return { type: 'image/png', width: png }
+  const ico = icoWidth(b)
+  return ico ? { type: 'image/x-icon', width: ico } : null
+}
+
+// 홈페이지 HTML 에서 아이콘 주소를 모은다(<link rel="icon">, <link rel="apple-touch-icon"> 등).
+// 많은 국내 사이트가 링크 없이 기본 위치에만 두므로 /apple-touch-icon.png 와 /favicon.ico 도 덧붙인다
+export function iconLinks(html: string, pageUrl: string): string[] {
+  const out = new Set<string>()
+  for (const [tag] of html.matchAll(/<link\b[^>]*>/gi)) {
+    if (!/\brel\s*=\s*["'][^"']*icon[^"']*["']/i.test(tag)) continue
+    const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]
+    if (!href) continue
+    try {
+      const u = new URL(href.trim(), pageUrl)
+      if (u.protocol === 'https:' || u.protocol === 'http:') out.add(u.href)
+    } catch {
+      // 잘못된 주소는 건너뛴다
+    }
+  }
+  out.add(new URL('/apple-touch-icon.png', pageUrl).href)
+  out.add(new URL('/favicon.ico', pageUrl).href)
+  return [...out]
+}
