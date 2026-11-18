@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { normCompany, type CompanyDomain } from '@/lib/companies'
-import { AppFrame, DoneNote, ErrorNote, PageHeader, buttonClass, inputClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, DoneNote, ErrorNote, PageHeader, buttonClass, inputClass, subtleButtonClass, Loading } from '@/components/shell'
 import { CompanyLogo } from '@/components/company-logo'
 import { clearDomain, saveDomain } from './actions'
 
@@ -17,7 +17,7 @@ type Row = { company: string; careers: number; stored: string | null; domain: st
 
 export default function CompaniesPage({ searchParams }: PageProps<'/admin/companies'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <Companies searchParams={searchParams} />
     </Suspense>
   )

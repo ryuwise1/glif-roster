@@ -232,6 +232,16 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   )
 }
 
+// 페이지 데이터를 읽는 동안 보이는 화면. 로고가 천천히 깜빡인다 (움직임 줄이기 설정이면 멈춘다).
+export function Loading() {
+  return (
+    <div role="status" className="flex min-h-[60vh] items-center justify-center">
+      <img src="/glif-logo-navy.png" alt="" width={480} height={254} className="h-16 w-auto motion-safe:animate-pulse" />
+      <span className="sr-only">불러오는 중…</span>
+    </div>
+  )
+}
+
 export function DoneNote({ children }: { children: ReactNode }) {
   return (
     <p role="status" className="mb-4 rounded border border-ok/30 bg-ok/5 px-4 py-3 text-sm font-medium text-ok">

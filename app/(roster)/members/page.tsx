@@ -2,12 +2,12 @@ import { Suspense } from 'react'
 import { requireApproved } from '@/lib/auth'
 import { loadRoster } from '@/lib/roster-data'
 import { ordinal, parseFilters, todayKST } from '@/lib/roster'
-import { AppFrame, DoneNote, Hero } from '@/components/shell'
+import { AppFrame, DoneNote, Hero, Loading } from '@/components/shell'
 import { MemberDirectory } from '@/components/member-directory'
 
 export default function MembersPage({ searchParams }: PageProps<'/members'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <Members searchParams={searchParams} />
     </Suspense>
   )

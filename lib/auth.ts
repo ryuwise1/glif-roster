@@ -1,5 +1,6 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
 export type AccountRow = {
@@ -17,8 +18,9 @@ export type Access =
   | { state: 'registered'; userId: string; email: string | null; account: AccountRow }
 
 // 지금 로그인한 사람이 어떤 상태인지 읽는다. getUser() 는 Supabase 서버에 토큰을 확인하므로 쿠키만 믿지 않는다.
-export async function getAccess(): Promise<Access> {
-  const supabase = await createClient()
+// supabase: 방금 로그인을 마친 클라이언트가 있으면 그것을 쓴다 (app/auth/callback)
+export async function getAccess(supabase?: SupabaseClient): Promise<Access> {
+  supabase ??= await createClient()
   const { data } = await supabase.auth.getUser()
   const user = data.user
   if (!user) return { state: 'anon' }

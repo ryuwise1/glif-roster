@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { AppFrame, Badge, DoneNote, ErrorNote, PageHeader, buttonClass, cardClass, inputClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, Badge, DoneNote, ErrorNote, PageHeader, buttonClass, cardClass, inputClass, subtleButtonClass, Loading } from '@/components/shell'
 import { nameMatches } from '@/lib/approvals'
 import { approve, approveAsNew, approveMany, reject } from './actions'
 
@@ -36,7 +36,7 @@ const AUTO_LIMIT = 30
 
 export default function ApprovalsPage({ searchParams }: PageProps<'/admin/approvals'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <Approvals searchParams={searchParams} />
     </Suspense>
   )
