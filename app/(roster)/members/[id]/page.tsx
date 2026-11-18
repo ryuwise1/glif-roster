@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
 import { groupByCompany, isCurrent, todayKST, type Career, type DirectoryMember } from '@/lib/roster'
 import { domainMap, type CompanyDomain } from '@/lib/companies'
-import { AppFrame, CohortLabel, cardClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, CohortLabel, cardClass, subtleButtonClass, Loading } from '@/components/shell'
 import { MemberPhoto } from '@/components/member-photo'
 import { CareerGroups } from '@/components/career-groups'
 
@@ -14,7 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default function MemberPage({ params }: PageProps<'/members/[id]'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <Member params={params} />
     </Suspense>
   )

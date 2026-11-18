@@ -2,13 +2,13 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { AppFrame, PageHeader, cardClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, PageHeader, cardClass, subtleButtonClass, Loading } from '@/components/shell'
 import { createMember } from '../actions'
 import { MemberForm } from '../forms'
 
 export default function NewMemberPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <NewMember />
     </Suspense>
   )

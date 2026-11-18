@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CAREER_COLUMNS } from '@/lib/roster-data'
 import type { Career } from '@/lib/roster'
-import { AppFrame, DoneNote, ErrorNote, PageHeader, SectionTitle, cardClass, dangerButtonClass, subtleButtonClass } from '@/components/shell'
+import { AppFrame, DoneNote, ErrorNote, PageHeader, SectionTitle, cardClass, dangerButtonClass, subtleButtonClass, Loading } from '@/components/shell'
 import { CareerEditor } from '@/components/career-editor'
 import { deleteCareer, deleteMember, saveCareer, updateMember } from '../actions'
 import { ConfirmButton, MemberForm, type EditableMember } from '../forms'
@@ -25,7 +25,7 @@ const ERRORS: Record<string, string> = {
 
 export default function EditMemberPage({ params, searchParams }: PageProps<'/admin/members/[id]'>) {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+    <Suspense fallback={<Loading />}>
       <EditMember params={params} searchParams={searchParams} />
     </Suspense>
   )
